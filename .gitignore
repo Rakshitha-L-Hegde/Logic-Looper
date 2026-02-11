@@ -1,0 +1,7 @@
+# Backend secrets
+backend/.env
+
+# Node modules
+node_modules/
+backend/node_modules/
+client/node_modules/
