@@ -1,12 +1,23 @@
-import { useState, useEffect } from "react";
+
 
 /* ========================= */
 /*        GAME ROOT          */
 /* ========================= */
 
+import { useState, useEffect } from "react";
+
 const puzzleTypes = ["number", "sequence", "pattern", "binary", "deduction"];
 
 export default function Game() {
+  /* ---------------- TIMER + SCORE STATE ---------------- */
+
+  const [startTime, setStartTime] = useState(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [timeTaken, setTimeTaken] = useState(null);
+  const [score, setScore] = useState(null);
+
+  /* ---------------- DATE + STREAK ---------------- */
+
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isCompleted, setIsCompleted] = useState(false);
   const [streak, setStreak] = useState(0);
@@ -39,16 +50,43 @@ export default function Game() {
       completedDates: {},
       streak: 0,
       lastCompleted: null,
+      dailyScores: {},
+      dailyTimes: {},
     };
 
     setStreak(saved.streak);
 
-    if (saved.completedDates[todayString]) {
-      setIsCompleted(true);
+    const alreadyCompleted = !!saved.completedDates[todayString];
+    setIsCompleted(alreadyCompleted);
+
+    if (alreadyCompleted) {
+      // Restore stored score and time
+      setScore(saved.dailyScores?.[todayString] || null);
+      setTimeTaken(saved.dailyTimes?.[todayString] || null);
+      setStartTime(null);
     } else {
-      setIsCompleted(false);
+      setStartTime(Date.now());
+      setTimeTaken(null);
+      setScore(null);
     }
   }, [todayString]);
+
+  /* ---------------- LIVE TIMER ---------------- */
+
+  useEffect(() => {
+    if (!isCompleted && startTime) {
+      const timer = setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [isCompleted, startTime]);
+
+  const liveSeconds =
+    startTime && !isCompleted
+      ? Math.floor((currentTime - startTime) / 1000)
+      : null;
 
   /* ---------------- MARK COMPLETE ---------------- */
 
@@ -57,6 +95,8 @@ export default function Game() {
       completedDates: {},
       streak: 0,
       lastCompleted: null,
+      dailyScores: {},
+      dailyTimes: {},
     };
 
     if (saved.completedDates[todayString]) return;
@@ -74,6 +114,31 @@ export default function Game() {
     }
 
     saved.lastCompleted = todayString;
+
+    /* -------- TIMER -------- */
+
+    const endTime = Date.now();
+    const seconds = startTime
+      ? Math.floor((endTime - startTime) / 1000)
+      : 0;
+
+    setTimeTaken(seconds);
+
+    /* -------- SCORE -------- */
+
+    const difficultyBonus = Math.floor((dayOfYear / 365) * 50);
+    const streakBonus = saved.streak * 5;
+
+    let finalScore = 100 + difficultyBonus + streakBonus - seconds;
+
+    if (finalScore < 10) finalScore = 10;
+
+    setScore(finalScore);
+
+    /* -------- SAVE DATA -------- */
+
+    saved.dailyScores[todayString] = finalScore;
+    saved.dailyTimes[todayString] = seconds;
 
     localStorage.setItem("logic-progress", JSON.stringify(saved));
 
@@ -93,15 +158,26 @@ export default function Game() {
         🔥 Streak: <span className="font-bold">{streak}</span>
       </p>
 
+      {!isCompleted && liveSeconds !== null && (
+        <p className="mb-2 text-sm">⏱ Timer: {liveSeconds} sec</p>
+      )}
+
       <p className="mb-4 text-lg">
         Puzzle Type: <span className="font-bold">{puzzleType}</span>
       </p>
 
       {isCompleted ? (
         <div className="text-center">
-          <p className="text-green-400 text-xl mb-4">
+          <p className="text-green-400 text-xl mb-2">
             ✅ Completed! Come back tomorrow.
           </p>
+
+          {timeTaken !== null && (
+            <>
+              <p>⏱ Time: {timeTaken} sec</p>
+              <p>🏆 Score: {score}</p>
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -122,11 +198,11 @@ export default function Game() {
           )}
         </>
       )}
+
       <Heatmap />
     </div>
   );
 }
-
 
 /* ========================= */
 /*      1️⃣ NUMBER MATRIX    */
