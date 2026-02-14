@@ -1,4 +1,13 @@
-
+function StatCard({ title, value, highlight }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-lg p-6 text-center">
+      <p className="text-gray-500 text-sm mb-2">{title}</p>
+      <p className={`text-xl font-semibold ${highlight ? "text-[#7752FE]" : "text-[#222222]"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
 /* ========================= */
 /*        GAME ROOT          */
@@ -43,6 +52,13 @@ export default function Game() {
   const typeIndex = dayOfYear % puzzleTypes.length;
   const puzzleType = puzzleTypes[typeIndex];
 
+  /* ---------------- HINT SYSTEM ---------------- */
+
+  const hintKey = `logic-hints-${todayString}`;
+
+  const [hintsRemaining, setHintsRemaining] = useState(3);
+  const [hintsUsed, setHintsUsed] = useState(0);
+
   /* ---------------- LOAD PROGRESS ---------------- */
 
   useEffect(() => {
@@ -60,7 +76,6 @@ export default function Game() {
     setIsCompleted(alreadyCompleted);
 
     if (alreadyCompleted) {
-      // Restore stored score and time
       setScore(saved.dailyScores?.[todayString] || null);
       setTimeTaken(saved.dailyTimes?.[todayString] || null);
       setStartTime(null);
@@ -69,6 +84,23 @@ export default function Game() {
       setTimeTaken(null);
       setScore(null);
     }
+
+    /* -------- LOAD HINTS -------- */
+
+    const savedHints = JSON.parse(localStorage.getItem(hintKey));
+
+    if (savedHints) {
+      setHintsRemaining(savedHints.remaining);
+      setHintsUsed(savedHints.used);
+    } else {
+      localStorage.setItem(
+        hintKey,
+        JSON.stringify({ remaining: 3, used: 0 })
+      );
+      setHintsRemaining(3);
+      setHintsUsed(0);
+    }
+
   }, [todayString]);
 
   /* ---------------- LIVE TIMER ---------------- */
@@ -87,6 +119,26 @@ export default function Game() {
     startTime && !isCompleted
       ? Math.floor((currentTime - startTime) / 1000)
       : null;
+
+  /* ---------------- USE HINT ---------------- */
+
+  const useHint = () => {
+    if (hintsRemaining <= 0 || isCompleted) return;
+
+    const newRemaining = hintsRemaining - 1;
+    const newUsed = hintsUsed + 1;
+
+    setHintsRemaining(newRemaining);
+    setHintsUsed(newUsed);
+
+    localStorage.setItem(
+      hintKey,
+      JSON.stringify({
+        remaining: newRemaining,
+        used: newUsed,
+      })
+    );
+  };
 
   /* ---------------- MARK COMPLETE ---------------- */
 
@@ -133,6 +185,12 @@ export default function Game() {
 
     if (finalScore < 10) finalScore = 10;
 
+    /* -------- APPLY HINT PENALTY -------- */
+
+    finalScore = Math.floor(
+      finalScore * Math.pow(0.9, hintsUsed)
+    );
+
     setScore(finalScore);
 
     /* -------- SAVE DATA -------- */
@@ -148,67 +206,115 @@ export default function Game() {
 
   /* ---------------- UI ---------------- */
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold mb-2">
-        Logic Looper - Daily Puzzle
+return (
+  <div className="min-h-screen bg-[#F6F5F5]">
+
+    {/* TOP BRAND BAR */}
+    <div className="bg-[#190482] text-white px-10 py-5 flex justify-between items-center shadow-lg">
+      <h1 className="text-2xl font-bold tracking-wide">
+        Logic Looper
       </h1>
 
-      <p className="mb-2">
-        🔥 Streak: <span className="font-bold">{streak}</span>
-      </p>
-
-      {!isCompleted && liveSeconds !== null && (
-        <p className="mb-2 text-sm">⏱ Timer: {liveSeconds} sec</p>
-      )}
-
-      <p className="mb-4 text-lg">
-        Puzzle Type: <span className="font-bold">{puzzleType}</span>
-      </p>
-
-      {isCompleted ? (
-        <div className="text-center">
-          <p className="text-green-400 text-xl mb-2">
-            ✅ Completed! Come back tomorrow.
-          </p>
-
-          {timeTaken !== null && (
-            <>
-              <p>⏱ Time: {timeTaken} sec</p>
-              <p>🏆 Score: {score}</p>
-            </>
-          )}
-        </div>
-      ) : (
-        <>
-          {puzzleType === "number" && (
-            <NumberMatrix dayOfYear={dayOfYear} onComplete={markCompleted} />
-          )}
-          {puzzleType === "sequence" && (
-            <SequenceSolver dayOfYear={dayOfYear} onComplete={markCompleted} />
-          )}
-          {puzzleType === "pattern" && (
-            <PatternMatch dayOfYear={dayOfYear} onComplete={markCompleted} />
-          )}
-          {puzzleType === "binary" && (
-            <BinaryLogic dayOfYear={dayOfYear} onComplete={markCompleted} />
-          )}
-          {puzzleType === "deduction" && (
-            <DeductionGrid dayOfYear={dayOfYear} onComplete={markCompleted} />
-          )}
-        </>
-      )}
-
-      <Heatmap />
+      <div className="flex items-center gap-6 text-sm">
+        <div>🔥 {streak}</div>
+      </div>
     </div>
-  );
+
+    {/* MAIN CONTAINER */}
+    <div className="max-w-6xl mx-auto px-6 py-10">
+
+      {/* DASHBOARD HEADER */}
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-[#190482]">
+          Daily Challenge
+        </h2>
+        <p className="text-gray-500 mt-2">
+          Solve today’s logic puzzle and maintain your streak.
+        </p>
+      </div>
+
+      {/* STATS ROW */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <StatCard title="Timer" value={liveSeconds ? `${liveSeconds}s` : "-"} />
+        <StatCard title="Hints Remaining" value={hintsRemaining} highlight />
+        <StatCard title="Puzzle Type" value={puzzleType} />
+      </div>
+
+      {/* PUZZLE CARD */}
+      <div className="bg-white rounded-3xl shadow-2xl p-10 mb-12">
+        {isCompleted ? (
+          <div className="text-center">
+            <p className="text-2xl font-semibold text-[#414BEA] mb-4">
+              🎉 Puzzle Completed
+            </p>
+            <p className="text-gray-600">Time: {timeTaken}s</p>
+            <p className="text-gray-600">Score: {score}</p>
+          </div>
+        ) : (
+          <>
+            {puzzleType === "number" && (
+              <NumberMatrix
+                dayOfYear={dayOfYear}
+                onComplete={markCompleted}
+                onHint={useHint}
+                hintsRemaining={hintsRemaining}
+              />
+            )}
+            {puzzleType === "sequence" && (
+              <SequenceSolver
+                dayOfYear={dayOfYear}
+                onComplete={markCompleted}
+                onHint={useHint}
+                hintsRemaining={hintsRemaining}
+              />
+            )}
+            {puzzleType === "pattern" && (
+              <PatternMatch
+                dayOfYear={dayOfYear}
+                onComplete={markCompleted}
+                onHint={useHint}
+                hintsRemaining={hintsRemaining}
+              />
+            )}
+            {puzzleType === "binary" && (
+              <BinaryLogic
+                dayOfYear={dayOfYear}
+                onComplete={markCompleted}
+                onHint={useHint}
+                hintsRemaining={hintsRemaining}
+              />
+            )}
+            {puzzleType === "deduction" && (
+              <DeductionGrid
+                dayOfYear={dayOfYear}
+                onComplete={markCompleted}
+                onHint={useHint}
+                hintsRemaining={hintsRemaining}
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ACTIVITY CARD */}
+      <div className="bg-white rounded-3xl shadow-xl p-8">
+        <h3 className="text-xl font-bold text-[#190482] mb-6">
+          Year Activity
+        </h3>
+        <Heatmap />
+      </div>
+
+    </div>
+  </div>
+);
 }
+
 
 /* ========================= */
 /*      1️⃣ NUMBER MATRIX    */
 /* ========================= */
 
-function NumberMatrix({ dayOfYear,onComplete }) {
+function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const storageKey = `logic-number-${dayOfYear}`;
 
   /* ---------------- BASE VALID SOLUTION ---------------- */
@@ -224,7 +330,7 @@ function NumberMatrix({ dayOfYear,onComplete }) {
 
   function seededSwapRows(grid, seed) {
     const copy = grid.map((row) => [...row]);
-    const block = seed % 2; // swap within block
+    const block = seed % 2;
     const row1 = block * 2;
     const row2 = row1 + 1;
 
@@ -251,10 +357,7 @@ function NumberMatrix({ dayOfYear,onComplete }) {
 
   /* ---------------- DIFFICULTY SCALING ---------------- */
 
-  // Increase blanks over year
   const blanks = 4 + Math.floor((dayOfYear / 365) * 8);
-  // Early year = 4 blanks
-  // End year = up to 12 blanks
 
   function generatePuzzle(sol, seed) {
     const puzzle = sol.map((row) => [...row]);
@@ -285,10 +388,32 @@ function NumberMatrix({ dayOfYear,onComplete }) {
   });
 
   const [message, setMessage] = useState("");
+  const [hintedCells, setHintedCells] = useState([]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(grid));
   }, [grid, storageKey]);
+
+  /* ---------------- HINT LOGIC ---------------- */
+
+  const giveHint = () => {
+    if (hintsRemaining <= 0) return;
+
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (grid[r][c] === "") {
+          const copy = grid.map((row) => [...row]);
+          copy[r][c] = solution[r][c];
+          setGrid(copy);
+
+          setHintedCells((prev) => [...prev, `${r}-${c}`]);
+
+          onHint(); // inform Game to reduce hint count
+          return;
+        }
+      }
+    }
+  };
 
   /* ---------------- VALIDATION ENGINE ---------------- */
 
@@ -310,7 +435,6 @@ function NumberMatrix({ dayOfYear,onComplete }) {
       }
     }
 
-    // Check 2x2 boxes
     for (let boxRow = 0; boxRow < 4; boxRow += 2) {
       for (let boxCol = 0; boxCol < 4; boxCol += 2) {
         const boxSet = new Set();
@@ -329,30 +453,30 @@ function NumberMatrix({ dayOfYear,onComplete }) {
 
   const handleChange = (r, c, val) => {
     if (val > 4 || val < 1) return;
+
     const copy = grid.map((row) => [...row]);
     copy[r][c] = Number(val);
     setGrid(copy);
   };
 
   const check = () => {
-  if (!isValidSudoku(grid)) {
-    setMessage("❌ Invalid Sudoku Rules!");
-    return;
-  }
+    if (!isValidSudoku(grid)) {
+      setMessage("❌ Invalid Sudoku Rules!");
+      return;
+    }
 
-  for (let i = 0; i < 4; i++) {
-    for (let j = 0; j < 4; j++) {
-      if (grid[i][j] !== solution[i][j]) {
-        setMessage("❌ Incorrect Solution!");
-        return;
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        if (grid[i][j] !== solution[i][j]) {
+          setMessage("❌ Incorrect Solution!");
+          return;
+        }
       }
     }
-  }
 
-  setMessage("🎉 Correct Sudoku!");
-  onComplete();
-};
-
+    setMessage("🎉 Correct Sudoku!");
+    onComplete();
+  };
 
   /* ---------------- UI ---------------- */
 
@@ -360,18 +484,24 @@ function NumberMatrix({ dayOfYear,onComplete }) {
     <>
       <div className="grid grid-cols-4 gap-2">
         {grid.map((row, r) =>
-          row.map((cell, c) => (
-            <input
-              key={`${r}-${c}`}
-              type="number"
-              value={cell}
-              min="1"
-              max="4"
-              disabled={puzzle[r][c] !== ""}
-              onChange={(e) => handleChange(r, c, e.target.value)}
-              className="w-14 h-14 text-center text-black rounded"
-            />
-          ))
+          row.map((cell, c) => {
+            const isLocked = puzzle[r][c] !== "";
+            const isHinted = hintedCells.includes(`${r}-${c}`);
+
+            return (
+              <input
+                key={`${r}-${c}`}
+                type="number"
+                value={cell}
+                min="1"
+                max="4"
+                disabled={isLocked || isHinted}
+                onChange={(e) => handleChange(r, c, e.target.value)}
+                className={`w-14 h-14 text-center text-black rounded 
+                  ${isHinted ? "bg-yellow-200" : ""}`}
+              />
+            );
+          })
         )}
       </div>
 
@@ -382,17 +512,24 @@ function NumberMatrix({ dayOfYear,onComplete }) {
         Check
       </button>
 
+      <button
+        onClick={giveHint}
+        disabled={hintsRemaining <= 0}
+        className="mt-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
+      >
+        💡 Hint ({hintsRemaining})
+      </button>
+
       {message && <p className="mt-3">{message}</p>}
     </>
   );
 }
 
-
 /* ========================= */
 /*     2️⃣ SEQUENCE SOLVER   */
 /* ========================= */
 
-function SequenceSolver({ dayOfYear,onComplete }) {
+function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
 
@@ -411,18 +548,16 @@ function SequenceSolver({ dayOfYear,onComplete }) {
   /* -------- DIFFICULTY SCALING -------- */
 
   const difficultyLevel = Math.floor((dayOfYear / 365) * 3);
-  // 0 = easy
-  // 1 = medium
-  // 2 = hard
 
   /* -------- PATTERN GENERATION -------- */
 
   const patternType = Math.floor(rand() * 4);
+
   let sequence = [];
   let answer;
+  let ruleDescription = "";
 
   if (patternType === 0) {
-    // Arithmetic progression
     const start = Math.floor(rand() * 10) + 1;
     const diff = Math.floor(rand() * 5) + 2 + difficultyLevel;
 
@@ -434,9 +569,10 @@ function SequenceSolver({ dayOfYear,onComplete }) {
     ];
 
     answer = start + 4 * diff;
+    ruleDescription = `Arithmetic progression (Common difference = ${diff})`;
+  }
 
-  } else if (patternType === 1) {
-    // Geometric progression
+  else if (patternType === 1) {
     const start = Math.floor(rand() * 5) + 2;
     const ratio = 2 + difficultyLevel;
 
@@ -448,9 +584,10 @@ function SequenceSolver({ dayOfYear,onComplete }) {
     ];
 
     answer = start * ratio ** 4;
+    ruleDescription = `Geometric progression (Common ratio = ${ratio})`;
+  }
 
-  } else if (patternType === 2) {
-    // Fibonacci-like
+  else if (patternType === 2) {
     const a = Math.floor(rand() * 5) + 1;
     const b = Math.floor(rand() * 5) + 1;
 
@@ -460,9 +597,10 @@ function SequenceSolver({ dayOfYear,onComplete }) {
     }
 
     answer = sequence[3] + sequence[2];
+    ruleDescription = "Fibonacci-like sequence (Each term = sum of previous two)";
+  }
 
-  } else {
-    // Quadratic progression
+  else {
     const base = Math.floor(rand() * 5) + 2;
 
     sequence = [
@@ -473,6 +611,7 @@ function SequenceSolver({ dayOfYear,onComplete }) {
     ];
 
     answer = base ** 5;
+    ruleDescription = `Power sequence (Powers of ${base})`;
   }
 
   /* -------- STATE -------- */
@@ -485,12 +624,14 @@ function SequenceSolver({ dayOfYear,onComplete }) {
   });
 
   const [message, setMessage] = useState("");
+  const [hintMessage, setHintMessage] = useState("");
+  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, input);
   }, [input, storageKey]);
 
-  /* -------- STRICT VALIDATION -------- */
+  /* -------- CHECK ANSWER -------- */
 
   const check = () => {
     if (Number(input) === answer) {
@@ -499,6 +640,17 @@ function SequenceSolver({ dayOfYear,onComplete }) {
     } else {
       setMessage("❌ Incorrect!");
     }
+  };
+
+  /* -------- HINT LOGIC -------- */
+
+  const giveHint = () => {
+    if (hintsRemaining <= 0 || hintUsedLocally) return;
+
+    setHintMessage(`💡 Hint: ${ruleDescription}`);
+    setHintUsedLocally(true);
+
+    onHint(); // notify Game to reduce global hints
   };
 
   /* -------- UI -------- */
@@ -522,7 +674,19 @@ function SequenceSolver({ dayOfYear,onComplete }) {
         Check
       </button>
 
+      <button
+        onClick={giveHint}
+        disabled={hintsRemaining <= 0 || hintUsedLocally}
+        className="ml-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
+      >
+        💡 Hint ({hintsRemaining})
+      </button>
+
       {message && <p className="mt-3">{message}</p>}
+
+      {hintMessage && (
+        <p className="mt-3 text-yellow-400">{hintMessage}</p>
+      )}
     </div>
   );
 }
@@ -531,7 +695,7 @@ function SequenceSolver({ dayOfYear,onComplete }) {
 /*      3️⃣ PATTERN MATCH     */
 /* ========================= */
 
-function PatternMatch({ dayOfYear,onComplete }) {
+function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
 
@@ -558,15 +722,19 @@ function PatternMatch({ dayOfYear,onComplete }) {
 
   let pattern = [];
   let answer;
+  let ruleDescription = "";
 
   /* -------- RULE 1: CYCLIC -------- */
 
   if (ruleType === 0) {
     const startIndex = Math.floor(rand() * symbols.length);
+
     for (let i = 0; i < patternLength; i++) {
       pattern.push(symbols[(startIndex + i) % symbols.length]);
     }
+
     answer = symbols[(startIndex + patternLength) % symbols.length];
+    ruleDescription = "Cyclic pattern (Symbols repeat in fixed order)";
   }
 
   /* -------- RULE 2: ALTERNATING -------- */
@@ -578,7 +746,9 @@ function PatternMatch({ dayOfYear,onComplete }) {
     for (let i = 0; i < patternLength; i++) {
       pattern.push(i % 2 === 0 ? s1 : s2);
     }
+
     answer = patternLength % 2 === 0 ? s1 : s2;
+    ruleDescription = "Alternating pattern (Two symbols repeat alternately)";
   }
 
   /* -------- RULE 3: SKIP PATTERN -------- */
@@ -595,6 +765,8 @@ function PatternMatch({ dayOfYear,onComplete }) {
 
     answer =
       symbols[(startIndex + patternLength * step) % symbols.length];
+
+    ruleDescription = `Skip pattern (Every ${step} symbol is selected)`;
   }
 
   /* -------- RULE 4: MIRROR PATTERN -------- */
@@ -609,6 +781,8 @@ function PatternMatch({ dayOfYear,onComplete }) {
 
     pattern = [...firstHalf, ...firstHalf.reverse()];
     answer = firstHalf[0];
+
+    ruleDescription = "Mirror pattern (Second half mirrors first half)";
   }
 
   /* -------- STATE -------- */
@@ -621,12 +795,14 @@ function PatternMatch({ dayOfYear,onComplete }) {
   });
 
   const [message, setMessage] = useState("");
+  const [hintMessage, setHintMessage] = useState("");
+  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, choice);
   }, [choice, storageKey]);
 
-  /* -------- STRICT VALIDATION -------- */
+  /* -------- CHECK ANSWER -------- */
 
   const check = () => {
     if (choice === answer) {
@@ -635,6 +811,17 @@ function PatternMatch({ dayOfYear,onComplete }) {
     } else {
       setMessage("❌ Incorrect!");
     }
+  };
+
+  /* -------- HINT LOGIC -------- */
+
+  const giveHint = () => {
+    if (hintsRemaining <= 0 || hintUsedLocally) return;
+
+    setHintMessage(`💡 Hint: ${ruleDescription}`);
+    setHintUsedLocally(true);
+
+    onHint(); // notify Game to reduce hint count
   };
 
   /* -------- UI -------- */
@@ -650,7 +837,8 @@ function PatternMatch({ dayOfYear,onComplete }) {
           <button
             key={sym}
             onClick={() => setChoice(sym)}
-            className="text-3xl"
+            className={`text-3xl p-2 rounded 
+              ${choice === sym ? "bg-blue-600" : ""}`}
           >
             {sym}
           </button>
@@ -664,17 +852,28 @@ function PatternMatch({ dayOfYear,onComplete }) {
         Check
       </button>
 
+      <button
+        onClick={giveHint}
+        disabled={hintsRemaining <= 0 || hintUsedLocally}
+        className="mt-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
+      >
+        💡 Hint ({hintsRemaining})
+      </button>
+
       {message && <p className="mt-3">{message}</p>}
+
+      {hintMessage && (
+        <p className="mt-3 text-yellow-400">{hintMessage}</p>
+      )}
     </div>
   );
 }
-
 
 /* ========================= */
 /*      4️⃣ BINARY LOGIC      */
 /* ========================= */
 
-function BinaryLogic({ dayOfYear ,onComplete}) {
+function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
 
@@ -693,11 +892,6 @@ function BinaryLogic({ dayOfYear ,onComplete}) {
   /* -------- DIFFICULTY -------- */
 
   const difficulty = Math.floor((dayOfYear / 365) * 3);
-  // 0 = simple
-  // 1 = medium
-  // 2 = hard
-
-  /* -------- OPERATORS -------- */
 
   const operators = ["AND", "OR", "XOR", "NAND", "NOR"];
 
@@ -720,16 +914,21 @@ function BinaryLogic({ dayOfYear ,onComplete}) {
 
   let expression;
   let result;
+  let hintExplanation = "";
 
   if (difficulty === 0) {
     expression = `${a} ${op1} ${b}`;
     result = applyOp(a, b, op1);
+
+    hintExplanation = `Evaluate: ${a} ${op1} ${b} = ${result}`;
   }
 
   else if (difficulty === 1) {
     expression = `(${a} ${op1} ${b}) ${op2} ${c}`;
     const first = applyOp(a, b, op1);
     result = applyOp(first, c, op2);
+
+    hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
 
   else {
@@ -738,6 +937,8 @@ function BinaryLogic({ dayOfYear ,onComplete}) {
     const first = applyOp(a, b, op1);
     const second = applyOp(first, c, op2);
     result = second ^ d;
+
+    hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
 
   /* -------- STATE -------- */
@@ -750,12 +951,14 @@ function BinaryLogic({ dayOfYear ,onComplete}) {
   });
 
   const [message, setMessage] = useState("");
+  const [hintMessage, setHintMessage] = useState("");
+  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, input);
   }, [input, storageKey]);
 
-  /* -------- STRICT VALIDATION -------- */
+  /* -------- CHECK ANSWER -------- */
 
   const check = () => {
     if (Number(input) === result) {
@@ -764,6 +967,17 @@ function BinaryLogic({ dayOfYear ,onComplete}) {
     } else {
       setMessage("❌ Incorrect!");
     }
+  };
+
+  /* -------- HINT LOGIC -------- */
+
+  const giveHint = () => {
+    if (hintsRemaining <= 0 || hintUsedLocally) return;
+
+    setHintMessage(`💡 Hint: ${hintExplanation}`);
+    setHintUsedLocally(true);
+
+    onHint(); // reduce global hints
   };
 
   /* -------- UI -------- */
@@ -788,17 +1002,28 @@ function BinaryLogic({ dayOfYear ,onComplete}) {
         Check
       </button>
 
+      <button
+        onClick={giveHint}
+        disabled={hintsRemaining <= 0 || hintUsedLocally}
+        className="ml-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
+      >
+        💡 Hint ({hintsRemaining})
+      </button>
+
       {message && <p className="mt-3">{message}</p>}
+
+      {hintMessage && (
+        <p className="mt-3 text-yellow-400">{hintMessage}</p>
+      )}
     </div>
   );
 }
-
 
 /* ========================= */
 /*     5️⃣ DEDUCTION GRID     */
 /* ========================= */
 
-function DeductionGrid({ dayOfYear,onComplete }) {
+function DeductionGrid({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
 
@@ -834,8 +1059,6 @@ function DeductionGrid({ dayOfYear,onComplete }) {
     return result;
   }
 
-  /* ---------------- ALL POSSIBLE WORLDS (36) ---------------- */
-
   const colorPerms = permute(colors);
   const petPerms = permute(pets);
 
@@ -851,17 +1074,16 @@ function DeductionGrid({ dayOfYear,onComplete }) {
     });
   });
 
-  /* ---------------- TRUE DAILY SOLUTION ---------------- */
+  /* ---------------- TRUE WORLD ---------------- */
 
   const trueWorld =
     allWorlds[Math.floor(rand() * allWorlds.length)];
 
-  /* ---------------- GENERATE UNIQUE CLUES ---------------- */
+  /* ---------------- GENERATE CLUES ---------------- */
 
   function generateClues(world) {
     const clues = [];
 
-    // Positive clue
     const person1 = people[Math.floor(rand() * 3)];
     clues.push({
       type: "likes",
@@ -869,7 +1091,6 @@ function DeductionGrid({ dayOfYear,onComplete }) {
       value: world[person1].color,
     });
 
-    // Negative clue
     const person2 = people[Math.floor(rand() * 3)];
     const wrongPet =
       pets.find((p) => p !== world[person2].pet);
@@ -879,7 +1100,6 @@ function DeductionGrid({ dayOfYear,onComplete }) {
       value: wrongPet,
     });
 
-    // Cross clue
     const person3 = people[Math.floor(rand() * 3)];
     clues.push({
       type: "petColor",
@@ -892,17 +1112,14 @@ function DeductionGrid({ dayOfYear,onComplete }) {
 
   function satisfies(world, clues) {
     return clues.every((clue) => {
-      if (clue.type === "likes") {
+      if (clue.type === "likes")
         return world[clue.person].color === clue.value;
-      }
-      if (clue.type === "notPet") {
+      if (clue.type === "notPet")
         return world[clue.person].pet !== clue.value;
-      }
-      if (clue.type === "petColor") {
+      if (clue.type === "petColor")
         return Object.values(world).some(
           (p) => p.pet === clue.pet && p.color === clue.color
         );
-      }
       return true;
     });
   }
@@ -922,12 +1139,8 @@ function DeductionGrid({ dayOfYear,onComplete }) {
     attempts++;
   }
 
-  const finalWorld = validWorlds.length === 1
-    ? validWorlds[0]
-    : trueWorld; // fallback safety
-
-
-  /* ---------------- QUESTION ---------------- */
+  const finalWorld =
+    validWorlds.length === 1 ? validWorlds[0] : trueWorld;
 
   const questionPet =
     pets[Math.floor(rand() * pets.length)];
@@ -946,25 +1159,46 @@ function DeductionGrid({ dayOfYear,onComplete }) {
   });
 
   const [message, setMessage] = useState("");
+  const [hintMessage, setHintMessage] = useState("");
+  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, input);
   }, [input, storageKey]);
 
+  /* ---------------- CHECK ---------------- */
+
   const check = () => {
-  const normalizedInput = input.trim().toLowerCase();
-  const normalizedAnswer = correctAnswer.toLowerCase();
+    const normalizedInput = input.trim().toLowerCase();
+    const normalizedAnswer = correctAnswer.toLowerCase();
 
-  if (normalizedInput === normalizedAnswer) {
-    setMessage("🎉 Correct!");
-    onComplete();
-  } else {
-    setMessage("❌ Incorrect!");
-  }
-};
+    if (normalizedInput === normalizedAnswer) {
+      setMessage("🎉 Correct!");
+      onComplete();
+    } else {
+      setMessage("❌ Incorrect!");
+    }
+  };
 
+  /* ---------------- HINT LOGIC ---------------- */
 
-  /* ---------------- RENDER CLUES ---------------- */
+  const giveHint = () => {
+    if (hintsRemaining <= 0 || hintUsedLocally) return;
+
+    // Pick a wrong person for the question pet
+    const wrongPerson = people.find(
+      (p) => p !== correctAnswer
+    );
+
+    const hintText = `💡 Hint: ${wrongPerson} does NOT own the ${questionPet}.`;
+
+    setHintMessage(hintText);
+    setHintUsedLocally(true);
+
+    onHint();
+  };
+
+  /* ---------------- FORMAT CLUES ---------------- */
 
   const formattedClues = clues.map((clue, i) => {
     if (clue.type === "likes")
@@ -975,6 +1209,8 @@ function DeductionGrid({ dayOfYear,onComplete }) {
       return `• The person who owns the ${clue.pet} likes ${clue.color}.`;
     return "";
   });
+
+  /* ---------------- UI ---------------- */
 
   return (
     <div className="text-center">
@@ -1002,10 +1238,23 @@ function DeductionGrid({ dayOfYear,onComplete }) {
         Check
       </button>
 
+      <button
+        onClick={giveHint}
+        disabled={hintsRemaining <= 0 || hintUsedLocally}
+        className="ml-3 bg-yellow-500 px-4 py-2 rounded mt-2 disabled:opacity-50"
+      >
+        💡 Hint ({hintsRemaining})
+      </button>
+
       {message && <p className="mt-3">{message}</p>}
+
+      {hintMessage && (
+        <p className="mt-3 text-yellow-400">{hintMessage}</p>
+      )}
     </div>
   );
 }
+
 
 function Heatmap() {
   const year = new Date().getFullYear();
