@@ -207,98 +207,139 @@ export default function Game() {
   /* ---------------- UI ---------------- */
 
 return (
-  <div className="min-h-screen bg-[#F6F5F5]">
+  <div className="min-h-screen bg-gradient-to-br from-purple-600 to-indigo-900 p-8">
+    <div className="max-w-6xl mx-auto text-white">
 
-    {/* TOP BRAND BAR */}
-    <div className="bg-[#190482] text-white px-10 py-5 flex justify-between items-center shadow-lg">
-      <h1 className="text-2xl font-bold tracking-wide">
-        Logic Looper
-      </h1>
-
-      <div className="flex items-center gap-6 text-sm">
-        <div>🔥 {streak}</div>
-      </div>
-    </div>
-
-    {/* MAIN CONTAINER */}
-    <div className="max-w-6xl mx-auto px-6 py-10">
-
-      {/* DASHBOARD HEADER */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-[#190482]">
+      {/* HEADER */}
+      <div className="text-center mb-10">
+        <h1 className="text-5xl font-extrabold drop-shadow-lg">
           Daily Challenge
-        </h2>
-        <p className="text-gray-500 mt-2">
+        </h1>
+        <p className="text-purple-200 mt-3">
           Solve today’s logic puzzle and maintain your streak.
         </p>
       </div>
 
-      {/* STATS ROW */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <StatCard title="Timer" value={liveSeconds ? `${liveSeconds}s` : "-"} />
-        <StatCard title="Hints Remaining" value={hintsRemaining} highlight />
-        <StatCard title="Puzzle Type" value={puzzleType} />
+      {/* STATS BAR */}
+      <div className="flex justify-between items-center mb-10 p-6 rounded-2xl bg-white/10 backdrop-blur-lg">
+        <div>
+          <p className="text-sm opacity-70">Timer</p>
+          <p className="text-2xl font-bold">
+            {liveSeconds !== null ? `${liveSeconds}s` : "-"}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm opacity-70">Hints Remaining</p>
+          <p className="text-2xl font-bold text-orange-400">
+            {hintsRemaining}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm opacity-70">Puzzle Type</p>
+          <p className="text-2xl font-bold capitalize">
+            {puzzleType}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-sm opacity-70">🔥 Streak</p>
+          <p className="text-2xl font-bold">
+            {streak}
+          </p>
+        </div>
       </div>
 
-      {/* PUZZLE CARD */}
-      <div className="bg-white rounded-3xl shadow-2xl p-10 mb-12">
-        {isCompleted ? (
-          <div className="text-center">
-            <p className="text-2xl font-semibold text-[#414BEA] mb-4">
-              🎉 Puzzle Completed
+      {/* MAIN GAME AREA */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+        {/* PUZZLE CARD */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-10 text-indigo-900 shadow-2xl">
+
+          {isCompleted ? (
+            <div className="text-center">
+              <p className="text-3xl font-bold text-purple-700 mb-4">
+                🎉 Puzzle Completed!
+              </p>
+              <p className="text-gray-600">Time: {timeTaken}s</p>
+              <p className="text-gray-600">Score: {score}</p>
+            </div>
+          ) : (
+            <>
+              {puzzleType === "number" && (
+                <NumberMatrix
+                  dayOfYear={dayOfYear}
+                  onComplete={markCompleted}
+                  onHint={useHint}
+                  hintsRemaining={hintsRemaining}
+                />
+              )}
+              {puzzleType === "sequence" && (
+                <SequenceSolver
+                  dayOfYear={dayOfYear}
+                  onComplete={markCompleted}
+                  onHint={useHint}
+                  hintsRemaining={hintsRemaining}
+                />
+              )}
+              {puzzleType === "pattern" && (
+                <PatternMatch
+                  dayOfYear={dayOfYear}
+                  onComplete={markCompleted}
+                  onHint={useHint}
+                  hintsRemaining={hintsRemaining}
+                />
+              )}
+              {puzzleType === "binary" && (
+                <BinaryLogic
+                  dayOfYear={dayOfYear}
+                  onComplete={markCompleted}
+                  onHint={useHint}
+                  hintsRemaining={hintsRemaining}
+                />
+              )}
+              {puzzleType === "deduction" && (
+                <DeductionGrid
+                  dayOfYear={dayOfYear}
+                  onComplete={markCompleted}
+                  onHint={useHint}
+                  hintsRemaining={hintsRemaining}
+                />
+              )}
+            </>
+          )}
+
+        </div>
+
+        {/* SIDE PANEL */}
+        <div className="p-6 rounded-2xl bg-white/10 backdrop-blur-lg">
+          <h3 className="text-xl font-bold mb-4">
+            How to Play
+          </h3>
+
+          <ul className="space-y-2 text-purple-200 text-sm">
+            <li>• Solve today’s logic challenge</li>
+            <li>• Use hints carefully (score penalty!)</li>
+            <li>• Maintain your streak</li>
+            <li>• Come back tomorrow for new puzzle</li>
+          </ul>
+
+          <div className="mt-6 p-4 rounded-xl bg-orange-500/20">
+            <p className="text-sm font-semibold">
+              💡 Current Streak
             </p>
-            <p className="text-gray-600">Time: {timeTaken}s</p>
-            <p className="text-gray-600">Score: {score}</p>
+            <p className="text-3xl font-bold mt-1">
+              {streak} Days
+            </p>
           </div>
-        ) : (
-          <>
-            {puzzleType === "number" && (
-              <NumberMatrix
-                dayOfYear={dayOfYear}
-                onComplete={markCompleted}
-                onHint={useHint}
-                hintsRemaining={hintsRemaining}
-              />
-            )}
-            {puzzleType === "sequence" && (
-              <SequenceSolver
-                dayOfYear={dayOfYear}
-                onComplete={markCompleted}
-                onHint={useHint}
-                hintsRemaining={hintsRemaining}
-              />
-            )}
-            {puzzleType === "pattern" && (
-              <PatternMatch
-                dayOfYear={dayOfYear}
-                onComplete={markCompleted}
-                onHint={useHint}
-                hintsRemaining={hintsRemaining}
-              />
-            )}
-            {puzzleType === "binary" && (
-              <BinaryLogic
-                dayOfYear={dayOfYear}
-                onComplete={markCompleted}
-                onHint={useHint}
-                hintsRemaining={hintsRemaining}
-              />
-            )}
-            {puzzleType === "deduction" && (
-              <DeductionGrid
-                dayOfYear={dayOfYear}
-                onComplete={markCompleted}
-                onHint={useHint}
-                hintsRemaining={hintsRemaining}
-              />
-            )}
-          </>
-        )}
+        </div>
+
       </div>
 
-      {/* ACTIVITY CARD */}
-      <div className="bg-white rounded-3xl shadow-xl p-8">
-        <h3 className="text-xl font-bold text-[#190482] mb-6">
+      {/* YEAR ACTIVITY */}
+      <div className="mt-12 bg-white rounded-2xl p-8 text-indigo-900 shadow-xl">
+        <h3 className="text-xl font-bold mb-6">
           Year Activity
         </h3>
         <Heatmap />
@@ -308,7 +349,6 @@ return (
   </div>
 );
 }
-
 
 /* ========================= */
 /*      1️⃣ NUMBER MATRIX    */
