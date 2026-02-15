@@ -82,26 +82,23 @@ export default function Game() {
     setIsCompleted(alreadyCompleted);
 
     if (alreadyCompleted) {
-  setScore(saved.dailyScores?.[todayString] || null);
-  setTimeTaken(saved.dailyTimes?.[todayString] || null);
-  setStartTime(null);
-} else {
-  const storedStart = localStorage.getItem(`logic-start-${todayString}`);
+      setScore(saved.dailyScores?.[todayString] || null);
+      setTimeTaken(saved.dailyTimes?.[todayString] || null);
+      setStartTime(null);
+    } else {
+      const storedStart = localStorage.getItem(`logic-start-${todayString}`);
 
-  if (storedStart) {
-    setStartTime(Number(storedStart));
-  } else {
-    const now = Date.now();
-    localStorage.setItem(`logic-start-${todayString}`, now);
-    setStartTime(now);
-  }
+      if (storedStart) {
+        setStartTime(Number(storedStart));
+      } else {
+        const now = Date.now();
+        localStorage.setItem(`logic-start-${todayString}`, now);
+        setStartTime(now);
+      }
 
-  setTimeTaken(null);
-  setScore(null);
-}
-
-
-    /* -------- LOAD HINTS -------- */
+      setTimeTaken(null);
+      setScore(null);
+    }
 
     const savedHints = JSON.parse(localStorage.getItem(hintKey));
 
@@ -113,7 +110,7 @@ export default function Game() {
         hintKey,
         JSON.stringify({ remaining: 2, used: 0 })
       );
-      setHintsRemaining(3);
+      setHintsRemaining(2);
       setHintsUsed(0);
     }
 
@@ -131,31 +128,29 @@ export default function Game() {
     }
   }, [isCompleted, startTime]);
 
+  /* ✅ FIXED HERE */
   const liveSeconds =
-  startTime && !isCompleted
-    ? Math.max(0, Math.floor((currentTime - startTime) / 1000))
-    : 0;
-
+    !isCompleted && startTime
+      ? Math.max(0, Math.floor((currentTime - startTime) / 1000))
+      : timeTaken ?? 0;
 
   const formatTime = (seconds) => {
-  if (!seconds || seconds < 0) seconds = 0;
+    if (!seconds || seconds < 0) seconds = 0;
 
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
 
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, "0")}:${minutes
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, "0")}:${minutes
+        .toString()
+        .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+
+    return `${minutes.toString().padStart(2, "0")}:${secs
       .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  }
-
-  return `${minutes.toString().padStart(2, "0")}:${secs
-    .toString()
-    .padStart(2, "0")}`;
-};
-
-
+      .padStart(2, "0")}`;
+  };
 
   /* ---------------- USE HINT ---------------- */
 
@@ -180,6 +175,7 @@ export default function Game() {
   /* ---------------- MARK COMPLETE ---------------- */
 
   const markCompleted = () => {
+    console.log("MARK COMPLETED CALLED");
     const saved = JSON.parse(localStorage.getItem("logic-progress")) || {
       completedDates: {},
       streak: 0,
@@ -204,14 +200,11 @@ export default function Game() {
 
     saved.lastCompleted = todayString;
 
-    /* -------- TIMER -------- */
-
-    const endTime = Date.now();
-    const seconds = startTime
-      ? Math.floor((endTime - startTime) / 1000)
-      : 0;
+    /* ✅ FIXED TIMER FREEZE */
+    const seconds = liveSeconds;
 
     setTimeTaken(seconds);
+    localStorage.removeItem(`logic-start-${todayString}`);
 
     /* -------- SCORE -------- */
 
@@ -221,8 +214,6 @@ export default function Game() {
     let finalScore = 100 + difficultyBonus + streakBonus - seconds;
 
     if (finalScore < 10) finalScore = 10;
-
-    /* -------- APPLY HINT PENALTY -------- */
 
     finalScore = Math.floor(
       finalScore * Math.pow(0.9, hintsUsed)
@@ -239,7 +230,10 @@ export default function Game() {
 
     setStreak(saved.streak);
     setIsCompleted(true);
+    console.log("Setting isCompleted TRUE");
+
   };
+
 
   /* ---------------- UI ---------------- */
 
@@ -298,58 +292,128 @@ return (
         <div className="lg:col-span-2 bg-white rounded-2xl p-10 text-indigo-900 shadow-2xl">
 
           {isCompleted ? (
-            <div className="text-center">
-              <p className="text-3xl font-bold text-purple-700 mb-4">
-                🎉 Puzzle Completed!
-              </p>
-              <p className="text-gray-600">Time: {timeTaken}s</p>
-              <p className="text-gray-600">Score: {score}</p>
-            </div>
-          ) : (
-            <>
-              {puzzleType === "number" && (
-                <NumberMatrix
-                  dayOfYear={dayOfYear}
-                  onComplete={markCompleted}
-                  onHint={useHint}
-                  hintsRemaining={hintsRemaining}
-                />
-              )}
-              {puzzleType === "sequence" && (
-                <SequenceSolver
-                  dayOfYear={dayOfYear}
-                  onComplete={markCompleted}
-                  onHint={useHint}
-                  hintsRemaining={hintsRemaining}
-                />
-              )}
-              {puzzleType === "pattern" && (
-                <PatternMatch
-                  dayOfYear={dayOfYear}
-                  onComplete={markCompleted}
-                  onHint={useHint}
-                  hintsRemaining={hintsRemaining}
-                />
-              )}
-              {puzzleType === "binary" && (
-                <BinaryLogic
-                  dayOfYear={dayOfYear}
-                  onComplete={markCompleted}
-                  onHint={useHint}
-                  hintsRemaining={hintsRemaining}
-                />
-              )}
-              {puzzleType === "deduction" && (
-                <DeductionGrid
-                  dayOfYear={dayOfYear}
-                  onComplete={markCompleted}
-                  onHint={useHint}
-                  hintsRemaining={hintsRemaining}
-                />
-              )}
-            </>
-          )}
 
+  <div
+    className="mt-6 p-6 rounded-xl"
+    style={{
+      backgroundColor: '#DDF2FD',
+      border: '3px solid #525CEB'
+    }}
+  >
+    <div className="text-center mb-4">
+      <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
+        🎉
+      </div>
+
+      <h4
+        style={{
+          fontSize: '1.5rem',
+          fontWeight: '700',
+          color: '#190482'
+        }}
+      >
+        Puzzle Complete!
+      </h4>
+    </div>
+
+    <div className="grid grid-cols-2 gap-4">
+      <div
+        className="p-4 rounded-lg text-center"
+        style={{ backgroundColor: '#FFFFFF' }}
+      >
+        <div
+          style={{
+            fontSize: '0.875rem',
+            color: '#7752FE',
+            fontWeight: '600'
+          }}
+        >
+          Time Taken
+        </div>
+
+        <div
+          style={{
+            fontSize: '2rem',
+            fontWeight: '700',
+            color: '#190482'
+          }}
+        >
+          {formatTime(timeTaken)}
+        </div>
+      </div>
+
+      <div
+        className="p-4 rounded-lg text-center"
+        style={{ backgroundColor: '#FFFFFF' }}
+      >
+        <div
+          style={{
+            fontSize: '0.875rem',
+            color: '#F05537',
+            fontWeight: '600'
+          }}
+        >
+          Final Score
+        </div>
+
+        <div
+          style={{
+            fontSize: '2rem',
+            fontWeight: '700',
+            color: '#190482'
+          }}
+        >
+          {score}
+        </div>
+      </div>
+    </div>
+  </div>
+
+) : (
+
+  <>
+    {puzzleType === "number" && (
+      <NumberMatrix
+        dayOfYear={dayOfYear}
+        onComplete={markCompleted}
+        onHint={useHint}
+        hintsRemaining={hintsRemaining}
+      />
+    )}
+    {puzzleType === "sequence" && (
+      <SequenceSolver
+        dayOfYear={dayOfYear}
+        onComplete={markCompleted}
+        onHint={useHint}
+        hintsRemaining={hintsRemaining}
+      />
+    )}
+    {puzzleType === "pattern" && (
+      <PatternMatch
+        dayOfYear={dayOfYear}
+        onComplete={markCompleted}
+        onHint={useHint}
+        hintsRemaining={hintsRemaining}
+      />
+    )}
+    {puzzleType === "binary" && (
+      <BinaryLogic
+        dayOfYear={dayOfYear}
+        onComplete={markCompleted}
+        onHint={useHint}
+        hintsRemaining={hintsRemaining}
+      />
+    )}
+    {puzzleType === "deduction" && (
+      <DeductionGrid
+        dayOfYear={dayOfYear}
+        onComplete={markCompleted}
+        onHint={useHint}
+        hintsRemaining={hintsRemaining}
+      />
+    )}
+  </>
+)}
         </div>
 
         {/* SIDE PANEL */}
@@ -390,66 +454,6 @@ return (
 );
 }
 
-function CelebrationOverlay({ score, timeTaken, hintsUsed, streak }) {
-  const [width, height] = useWindowSize();
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md text-white">
-
-      <Confetti
-        width={width}
-        height={height}
-        numberOfPieces={400}
-        recycle={false}
-      />
-
-      <div className="bg-white text-indigo-900 rounded-3xl shadow-2xl p-10 max-w-lg w-full text-center">
-
-        <h2 className="text-4xl font-extrabold mb-4">
-          🎉 Congratulations!
-        </h2>
-
-        <p className="text-gray-600 mb-6">
-          You solved today's challenge!
-        </p>
-
-        <div className="grid grid-cols-1 gap-4 mb-6">
-
-          <StatCard
-            title="Time Taken"
-            value={`${timeTaken}s`}
-            highlight
-          />
-
-          <StatCard
-            title="Hints Used"
-            value={hintsUsed}
-          />
-
-          <StatCard
-            title="Final Score"
-            value={score}
-            highlight
-          />
-
-          <StatCard
-            title="Current Streak"
-            value={`${streak} Days`}
-          />
-
-        </div>
-      </div>
-
-      <div className="mt-10 bg-white rounded-2xl p-6 text-indigo-900 shadow-xl max-w-5xl w-full">
-        <h3 className="text-xl font-bold mb-4 text-center">
-          Yearly Contributions
-        </h3>
-        <Heatmap />
-      </div>
-
-    </div>
-  );
-}
 
 /* ========================= */
 /*      1️⃣ NUMBER MATRIX    */
@@ -1530,13 +1534,16 @@ function Heatmap() {
   }
 
   const getColor = (day) => {
-    if (!day.isCurrentYear) return "bg-transparent";
-    if (day.score === 0) return "bg-gray-200";
-    if (day.score < 300) return "bg-green-200";
-    if (day.score < 500) return "bg-green-400";
-    if (day.score < 800) return "bg-green-600";
-    return "bg-green-800";
-  };
+  if (!day.isCurrentYear) return "bg-transparent";
+
+  if (!day.completed) return "bg-gray-200";
+
+  if (day.score < 300) return "bg-emerald-400 shadow-sm";
+  if (day.score < 500) return "bg-emerald-500 shadow-md";
+  if (day.score < 800) return "bg-emerald-600 shadow-md";
+  return "bg-emerald-700 shadow-lg";
+};
+
 
   const monthNames = [
     "Jan","Feb","Mar","Apr","May","Jun",
