@@ -12,6 +12,12 @@ function StatCard({ title, value, highlight }) {
 /* ========================= */
 /*        GAME ROOT          */
 /* ========================= */
+import dayjs from "dayjs";
+import { Clock } from "lucide-react";
+import { CheckCircle, Lightbulb } from "lucide-react";
+import Confetti from "react-confetti";
+import { useWindowSize } from "@react-hook/window-size";
+
 
 import { useState, useEffect } from "react";
 
@@ -56,7 +62,7 @@ export default function Game() {
 
   const hintKey = `logic-hints-${todayString}`;
 
-  const [hintsRemaining, setHintsRemaining] = useState(3);
+  const [hintsRemaining, setHintsRemaining] = useState(2);
   const [hintsUsed, setHintsUsed] = useState(0);
 
   /* ---------------- LOAD PROGRESS ---------------- */
@@ -76,14 +82,24 @@ export default function Game() {
     setIsCompleted(alreadyCompleted);
 
     if (alreadyCompleted) {
-      setScore(saved.dailyScores?.[todayString] || null);
-      setTimeTaken(saved.dailyTimes?.[todayString] || null);
-      setStartTime(null);
-    } else {
-      setStartTime(Date.now());
-      setTimeTaken(null);
-      setScore(null);
-    }
+  setScore(saved.dailyScores?.[todayString] || null);
+  setTimeTaken(saved.dailyTimes?.[todayString] || null);
+  setStartTime(null);
+} else {
+  const storedStart = localStorage.getItem(`logic-start-${todayString}`);
+
+  if (storedStart) {
+    setStartTime(Number(storedStart));
+  } else {
+    const now = Date.now();
+    localStorage.setItem(`logic-start-${todayString}`, now);
+    setStartTime(now);
+  }
+
+  setTimeTaken(null);
+  setScore(null);
+}
+
 
     /* -------- LOAD HINTS -------- */
 
@@ -95,7 +111,7 @@ export default function Game() {
     } else {
       localStorage.setItem(
         hintKey,
-        JSON.stringify({ remaining: 3, used: 0 })
+        JSON.stringify({ remaining: 2, used: 0 })
       );
       setHintsRemaining(3);
       setHintsUsed(0);
@@ -116,9 +132,30 @@ export default function Game() {
   }, [isCompleted, startTime]);
 
   const liveSeconds =
-    startTime && !isCompleted
-      ? Math.floor((currentTime - startTime) / 1000)
-      : null;
+  startTime && !isCompleted
+    ? Math.max(0, Math.floor((currentTime - startTime) / 1000))
+    : 0;
+
+
+  const formatTime = (seconds) => {
+  if (!seconds || seconds < 0) seconds = 0;
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+
+  return `${minutes.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}`;
+};
+
+
 
   /* ---------------- USE HINT ---------------- */
 
@@ -222,12 +259,20 @@ return (
 
       {/* STATS BAR */}
       <div className="flex justify-between items-center mb-10 p-6 rounded-2xl bg-white/10 backdrop-blur-lg">
-        <div>
-          <p className="text-sm opacity-70">Timer</p>
-          <p className="text-2xl font-bold">
-            {liveSeconds !== null ? `${liveSeconds}s` : "-"}
-          </p>
-        </div>
+        
+      <div className="flex items-center gap-4">
+  <div className="bg-white/20 p-3 rounded-xl">
+    <Clock size={22} />
+  </div>
+
+  <div>
+    <p className="text-sm opacity-70">Timer</p>
+    <p className="text-2xl font-bold tracking-wide">
+      {formatTime(liveSeconds)}
+    </p>
+  </div>
+</div>
+
 
         <div>
           <p className="text-sm opacity-70">Hints Remaining</p>
@@ -243,12 +288,7 @@ return (
           </p>
         </div>
 
-        <div>
-          <p className="text-sm opacity-70">🔥 Streak</p>
-          <p className="text-2xl font-bold">
-            {streak}
-          </p>
-        </div>
+        
       </div>
 
       {/* MAIN GAME AREA */}
@@ -340,7 +380,7 @@ return (
       {/* YEAR ACTIVITY */}
       <div className="mt-12 bg-white rounded-2xl p-8 text-indigo-900 shadow-xl">
         <h3 className="text-xl font-bold mb-6">
-          Year Activity
+          Yearly Contributions
         </h3>
         <Heatmap />
       </div>
@@ -348,6 +388,67 @@ return (
     </div>
   </div>
 );
+}
+
+function CelebrationOverlay({ score, timeTaken, hintsUsed, streak }) {
+  const [width, height] = useWindowSize();
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-md text-white">
+
+      <Confetti
+        width={width}
+        height={height}
+        numberOfPieces={400}
+        recycle={false}
+      />
+
+      <div className="bg-white text-indigo-900 rounded-3xl shadow-2xl p-10 max-w-lg w-full text-center">
+
+        <h2 className="text-4xl font-extrabold mb-4">
+          🎉 Congratulations!
+        </h2>
+
+        <p className="text-gray-600 mb-6">
+          You solved today's challenge!
+        </p>
+
+        <div className="grid grid-cols-1 gap-4 mb-6">
+
+          <StatCard
+            title="Time Taken"
+            value={`${timeTaken}s`}
+            highlight
+          />
+
+          <StatCard
+            title="Hints Used"
+            value={hintsUsed}
+          />
+
+          <StatCard
+            title="Final Score"
+            value={score}
+            highlight
+          />
+
+          <StatCard
+            title="Current Streak"
+            value={`${streak} Days`}
+          />
+
+        </div>
+      </div>
+
+      <div className="mt-10 bg-white rounded-2xl p-6 text-indigo-900 shadow-xl max-w-5xl w-full">
+        <h3 className="text-xl font-bold mb-4 text-center">
+          Yearly Contributions
+        </h3>
+        <Heatmap />
+      </div>
+
+    </div>
+  );
 }
 
 /* ========================= */
@@ -397,7 +498,7 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   /* ---------------- DIFFICULTY SCALING ---------------- */
 
-  const blanks = 4 + Math.floor((dayOfYear / 365) * 8);
+  const blanks = 4 + Math.floor(rand() * 8);
 
   function generatePuzzle(sol, seed) {
     const puzzle = sol.map((row) => [...row]);
@@ -437,7 +538,14 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   /* ---------------- HINT LOGIC ---------------- */
 
   const giveHint = () => {
-    if (hintsRemaining <= 0) return;
+  if (hintsRemaining <= 0) return;
+
+  if (hintsRemaining === 2) {
+    setMessage("💡 Hint 1: Check row and column uniqueness.");
+    onHint();
+    return;
+  }
+
 
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 4; c++) {
@@ -521,50 +629,79 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   /* ---------------- UI ---------------- */
 
   return (
-    <>
-      <div className="grid grid-cols-4 gap-2">
-        {grid.map((row, r) =>
-          row.map((cell, c) => {
-            const isLocked = puzzle[r][c] !== "";
-            const isHinted = hintedCells.includes(`${r}-${c}`);
+  <div className="text-center">
 
-            return (
-              <input
-                key={`${r}-${c}`}
-                type="number"
-                value={cell}
-                min="1"
-                max="4"
-                disabled={isLocked || isHinted}
-                onChange={(e) => handleChange(r, c, e.target.value)}
-                className={`w-14 h-14 text-center text-black rounded 
-                  ${isHinted ? "bg-yellow-200" : ""}`}
-              />
-            );
-          })
-        )}
-      </div>
+    {/* GRID */}
+    <div className="grid grid-cols-4 gap-3 justify-center mb-6">
+      {grid.map((row, r) =>
+        row.map((cell, c) => {
+          const isLocked = puzzle[r][c] !== "";
+          const isHinted = hintedCells.includes(`${r}-${c}`);
 
+          return (
+            <input
+              key={`${r}-${c}`}
+              type="number"
+              value={cell}
+              min="1"
+              max="4"
+              disabled={isLocked || isHinted}
+              onChange={(e) => handleChange(r, c, e.target.value)}
+              className={`w-16 h-16 text-center text-black rounded-lg border border-gray-300 
+                focus:outline-none focus:ring-2 focus:ring-indigo-400
+                ${isHinted ? "bg-yellow-200" : "bg-white"}
+              `}
+            />
+          );
+        })
+      )}
+    </div>
+
+    {/* BUTTONS */}
+    <div className="flex justify-center gap-4 mt-4">
+
+      {/* CLEAN CHECK BUTTON */}
       <button
         onClick={check}
-        className="mt-4 bg-blue-600 px-4 py-2 rounded"
+        className="flex items-center gap-2 
+                   bg-indigo-500 hover:bg-indigo-600
+                   text-white font-medium
+                   px-8 py-3 rounded-xl
+                   transition-all duration-200 shadow-sm"
       >
+        <CheckCircle size={18} />
         Check
       </button>
 
+      {/* CLEAN HINT BUTTON */}
       <button
         onClick={giveHint}
         disabled={hintsRemaining <= 0}
-        className="mt-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
+        className={`flex items-center gap-2 
+          px-8 py-3 rounded-xl font-medium
+          transition-all duration-200 shadow-sm
+          ${
+            hintsRemaining > 0
+              ? "bg-[#F05537] hover:bg-[#d94a2f] text-white"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          }
+        `}
       >
-        💡 Hint ({hintsRemaining})
+        <Lightbulb size={18} />
+        Hint
       </button>
 
-      {message && <p className="mt-3">{message}</p>}
-    </>
-  );
-}
+    </div>
 
+    {message && (
+      <p className="mt-4 font-medium">
+        {message}
+      </p>
+    )}
+
+  </div>
+);
+}
 /* ========================= */
 /*     2️⃣ SEQUENCE SOLVER   */
 /* ========================= */
@@ -572,8 +709,6 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
-
-  /* -------- SEEDED RANDOM GENERATOR -------- */
 
   function createSeededRandom(seed) {
     let value = seed;
@@ -585,12 +720,7 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const rand = createSeededRandom(seed);
 
-  /* -------- DIFFICULTY SCALING -------- */
-
-  const difficultyLevel = Math.floor((dayOfYear / 365) * 3);
-
-  /* -------- PATTERN GENERATION -------- */
-
+  const difficultyLevel = Math.floor(rand() * 3);
   const patternType = Math.floor(rand() * 4);
 
   let sequence = [];
@@ -601,13 +731,7 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     const start = Math.floor(rand() * 10) + 1;
     const diff = Math.floor(rand() * 5) + 2 + difficultyLevel;
 
-    sequence = [
-      start,
-      start + diff,
-      start + 2 * diff,
-      start + 3 * diff,
-    ];
-
+    sequence = [start, start + diff, start + 2 * diff, start + 3 * diff];
     answer = start + 4 * diff;
     ruleDescription = `Arithmetic progression (Common difference = ${diff})`;
   }
@@ -622,7 +746,6 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
       start * ratio ** 2,
       start * ratio ** 3,
     ];
-
     answer = start * ratio ** 4;
     ruleDescription = `Geometric progression (Common ratio = ${ratio})`;
   }
@@ -643,18 +766,10 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   else {
     const base = Math.floor(rand() * 5) + 2;
 
-    sequence = [
-      base,
-      base ** 2,
-      base ** 3,
-      base ** 4,
-    ];
-
+    sequence = [base, base ** 2, base ** 3, base ** 4];
     answer = base ** 5;
     ruleDescription = `Power sequence (Powers of ${base})`;
   }
-
-  /* -------- STATE -------- */
 
   const storageKey = `logic-sequence-${year}-${dayOfYear}`;
 
@@ -665,13 +780,10 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
-  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, input);
   }, [input, storageKey]);
-
-  /* -------- CHECK ANSWER -------- */
 
   const check = () => {
     if (Number(input) === answer) {
@@ -682,54 +794,84 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     }
   };
 
-  /* -------- HINT LOGIC -------- */
-
+  /* ✅ UPDATED HINT SYSTEM */
   const giveHint = () => {
-    if (hintsRemaining <= 0 || hintUsedLocally) return;
+    if (hintsRemaining <= 0) return;
 
-    setHintMessage(`💡 Hint: ${ruleDescription}`);
-    setHintUsedLocally(true);
+    if (hintsRemaining === 2) {
+      setHintMessage("💡 Hint 1: Observe how each term relates to the previous one.");
+    } 
+    else if (hintsRemaining === 1) {
+      setHintMessage(`💡 Hint 2: ${ruleDescription}`);
+    }
 
-    onHint(); // notify Game to reduce global hints
+    onHint();
   };
 
-  /* -------- UI -------- */
+  /* ================= UI ================= */
 
   return (
     <div className="text-center">
-      <p className="mb-4 text-xl">
+
+      <p className="mb-6 text-2xl font-semibold">
         {sequence.join(", ")}, ?
       </p>
 
+      {/* ✅ INPUT IMPROVED */}
       <input
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        className="text-black p-2 rounded"
+        className="text-black px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
 
-      <button
-        onClick={check}
-        className="ml-3 bg-blue-600 px-4 py-2 rounded"
-      >
-        Check
-      </button>
+      {/* ✅ BUTTONS WRAPPED + CENTERED */}
+      <div className="flex justify-center gap-4 mt-6">
 
-      <button
-        onClick={giveHint}
-        disabled={hintsRemaining <= 0 || hintUsedLocally}
-        className="ml-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
-      >
-        💡 Hint ({hintsRemaining})
-      </button>
+        {/* ✅ CLEAN CHECK BUTTON */}
+        <button
+          onClick={check}
+          className="flex items-center gap-2 
+                     bg-indigo-500 hover:bg-indigo-600
+                     text-white font-medium
+                     px-8 py-3 rounded-xl
+                     transition-all duration-200 shadow-sm"
+        >
+          <CheckCircle size={18} />
+          Check
+        </button>
 
-      {message && <p className="mt-3">{message}</p>}
+        {/* ✅ CLEAN HINT BUTTON */}
+        <button
+          onClick={giveHint}
+          disabled={hintsRemaining <= 0}
+          className={`flex items-center gap-2 
+            px-8 py-3 rounded-xl font-medium
+            transition-all duration-200 shadow-sm
+            ${
+              hintsRemaining > 0
+                ? "bg-[#F05537] hover:bg-[#d94a2f] text-white"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }
+          `}
+        >
+          <Lightbulb size={18} />
+          Hint
+        </button>
+
+      </div>
+
+      {message && <p className="mt-4 font-medium">{message}</p>}
 
       {hintMessage && (
-        <p className="mt-3 text-yellow-400">{hintMessage}</p>
+        <p className="mt-3 text-orange-400 font-medium">
+          {hintMessage}
+        </p>
       )}
+
     </div>
   );
 }
+
 
 /* ========================= */
 /*      3️⃣ PATTERN MATCH     */
@@ -738,8 +880,6 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
-
-  /* -------- SEEDED RANDOM -------- */
 
   function createSeededRandom(seed) {
     let value = seed;
@@ -751,33 +891,24 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const rand = createSeededRandom(seed);
 
-  /* -------- SYMBOL SET -------- */
-
   const symbols = ["🔺", "🔵", "⬛", "⬜", "🟢", "🟡"];
 
-  const difficulty = Math.floor((dayOfYear / 365) * 3);
+  const difficulty = Math.floor(rand() * 3);
   const patternLength = 4 + difficulty;
-
   const ruleType = Math.floor(rand() * 4);
 
   let pattern = [];
   let answer;
   let ruleDescription = "";
 
-  /* -------- RULE 1: CYCLIC -------- */
-
   if (ruleType === 0) {
     const startIndex = Math.floor(rand() * symbols.length);
-
     for (let i = 0; i < patternLength; i++) {
       pattern.push(symbols[(startIndex + i) % symbols.length]);
     }
-
     answer = symbols[(startIndex + patternLength) % symbols.length];
     ruleDescription = "Cyclic pattern (Symbols repeat in fixed order)";
   }
-
-  /* -------- RULE 2: ALTERNATING -------- */
 
   else if (ruleType === 1) {
     const s1 = symbols[Math.floor(rand() * symbols.length)];
@@ -791,25 +922,17 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     ruleDescription = "Alternating pattern (Two symbols repeat alternately)";
   }
 
-  /* -------- RULE 3: SKIP PATTERN -------- */
-
   else if (ruleType === 2) {
     const step = Math.floor(rand() * 3) + 1;
     const startIndex = Math.floor(rand() * symbols.length);
 
     for (let i = 0; i < patternLength; i++) {
-      pattern.push(
-        symbols[(startIndex + i * step) % symbols.length]
-      );
+      pattern.push(symbols[(startIndex + i * step) % symbols.length]);
     }
 
-    answer =
-      symbols[(startIndex + patternLength * step) % symbols.length];
-
+    answer = symbols[(startIndex + patternLength * step) % symbols.length];
     ruleDescription = `Skip pattern (Every ${step} symbol is selected)`;
   }
-
-  /* -------- RULE 4: MIRROR PATTERN -------- */
 
   else {
     const half = Math.floor(patternLength / 2);
@@ -819,13 +942,10 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
       firstHalf.push(symbols[Math.floor(rand() * symbols.length)]);
     }
 
-    pattern = [...firstHalf, ...firstHalf.reverse()];
+    pattern = [...firstHalf, ...firstHalf.slice().reverse()];
     answer = firstHalf[0];
-
     ruleDescription = "Mirror pattern (Second half mirrors first half)";
   }
-
-  /* -------- STATE -------- */
 
   const storageKey = `logic-pattern-${year}-${dayOfYear}`;
 
@@ -836,13 +956,10 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
-  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, choice);
   }, [choice, storageKey]);
-
-  /* -------- CHECK ANSWER -------- */
 
   const check = () => {
     if (choice === answer) {
@@ -853,58 +970,93 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     }
   };
 
-  /* -------- HINT LOGIC -------- */
-
+  /* ✅ PROGRESSIVE HINT SYSTEM */
   const giveHint = () => {
-    if (hintsRemaining <= 0 || hintUsedLocally) return;
+    if (hintsRemaining <= 0) return;
 
-    setHintMessage(`💡 Hint: ${ruleDescription}`);
-    setHintUsedLocally(true);
+    if (hintsRemaining === 2) {
+      setHintMessage("💡 Hint 1: Look at how symbols repeat or shift.");
+    } else {
+      setHintMessage(`💡 Hint 2: ${ruleDescription}`);
+    }
 
-    onHint(); // notify Game to reduce hint count
+    onHint();
   };
 
-  /* -------- UI -------- */
+  /* ================= UI ================= */
 
   return (
     <div className="text-center">
-      <p className="mb-4 text-xl">
+
+      <p className="mb-6 text-2xl font-semibold">
         {pattern.join(" ")} ?
       </p>
 
-      <div className="flex flex-wrap justify-center gap-3">
+      {/* ✅ SYMBOL OPTIONS */}
+      <div className="flex flex-wrap justify-center gap-4 mb-6">
         {symbols.map((sym) => (
           <button
             key={sym}
             onClick={() => setChoice(sym)}
-            className={`text-3xl p-2 rounded 
-              ${choice === sym ? "bg-blue-600" : ""}`}
+            className={`text-3xl px-4 py-3 rounded-xl border transition-all duration-200
+              ${
+                choice === sym
+                  ? "bg-indigo-500 text-white border-indigo-500"
+                  : "bg-white text-black border-gray-300 hover:bg-gray-100"
+              }
+            `}
           >
             {sym}
           </button>
         ))}
       </div>
 
-      <button
-        onClick={check}
-        className="mt-4 bg-blue-600 px-4 py-2 rounded"
-      >
-        Check
-      </button>
+      {/* ✅ BUTTONS CENTERED */}
+      <div className="flex justify-center gap-4">
 
-      <button
-        onClick={giveHint}
-        disabled={hintsRemaining <= 0 || hintUsedLocally}
-        className="mt-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
-      >
-        💡 Hint ({hintsRemaining})
-      </button>
+        {/* CLEAN CHECK BUTTON */}
+        <button
+          onClick={check}
+          className="flex items-center gap-2 
+                     bg-indigo-500 hover:bg-indigo-600
+                     text-white font-medium
+                     px-8 py-3 rounded-xl
+                     transition-all duration-200 shadow-sm"
+        >
+          <CheckCircle size={18} />
+          Check
+        </button>
 
-      {message && <p className="mt-3">{message}</p>}
+        {/* CLEAN HINT BUTTON */}
+        <button
+          onClick={giveHint}
+          disabled={hintsRemaining <= 0}
+          className={`flex items-center gap-2 
+            px-8 py-3 rounded-xl font-medium
+            transition-all duration-200 shadow-sm
+            ${
+              hintsRemaining > 0
+                ? "bg-[#F05537] hover:bg-[#d94a2f] text-white"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }
+          `}
+        >
+          <Lightbulb size={18} />
+          Hint
+        </button>
+
+      </div>
+
+      {message && (
+        <p className="mt-4 font-medium">{message}</p>
+      )}
 
       {hintMessage && (
-        <p className="mt-3 text-yellow-400">{hintMessage}</p>
+        <p className="mt-3 text-orange-400 font-medium">
+          {hintMessage}
+        </p>
       )}
+
     </div>
   );
 }
@@ -917,8 +1069,6 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   const year = new Date().getFullYear();
   const seed = year * 1000 + dayOfYear;
 
-  /* -------- SEEDED RANDOM -------- */
-
   function createSeededRandom(seed) {
     let value = seed;
     return function () {
@@ -929,10 +1079,7 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const rand = createSeededRandom(seed);
 
-  /* -------- DIFFICULTY -------- */
-
-  const difficulty = Math.floor((dayOfYear / 365) * 3);
-
+  const difficulty = Math.floor(rand() * 3);
   const operators = ["AND", "OR", "XOR", "NAND", "NOR"];
 
   function applyOp(a, b, op) {
@@ -942,8 +1089,6 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     if (op === "NAND") return a & b ? 0 : 1;
     if (op === "NOR") return a | b ? 0 : 1;
   }
-
-  /* -------- GENERATE EXPRESSION -------- */
 
   const a = Math.floor(rand() * 2);
   const b = Math.floor(rand() * 2);
@@ -959,7 +1104,6 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   if (difficulty === 0) {
     expression = `${a} ${op1} ${b}`;
     result = applyOp(a, b, op1);
-
     hintExplanation = `Evaluate: ${a} ${op1} ${b} = ${result}`;
   }
 
@@ -967,7 +1111,6 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     expression = `(${a} ${op1} ${b}) ${op2} ${c}`;
     const first = applyOp(a, b, op1);
     result = applyOp(first, c, op2);
-
     hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
 
@@ -977,11 +1120,8 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     const first = applyOp(a, b, op1);
     const second = applyOp(first, c, op2);
     result = second ^ d;
-
     hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
-
-  /* -------- STATE -------- */
 
   const storageKey = `logic-binary-${year}-${dayOfYear}`;
 
@@ -992,13 +1132,10 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
-  const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, input);
   }, [input, storageKey]);
-
-  /* -------- CHECK ANSWER -------- */
 
   const check = () => {
     if (Number(input) === result) {
@@ -1009,22 +1146,27 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     }
   };
 
-  /* -------- HINT LOGIC -------- */
+  /* ---------- 2 LEVEL HINT SYSTEM ---------- */
 
   const giveHint = () => {
-    if (hintsRemaining <= 0 || hintUsedLocally) return;
+    if (hintsRemaining <= 0) return;
 
-    setHintMessage(`💡 Hint: ${hintExplanation}`);
-    setHintUsedLocally(true);
+    if (hintsRemaining === 2) {
+      setHintMessage("💡 Hint 1: Evaluate expressions inside brackets first.");
+    } 
+    else if (hintsRemaining === 1) {
+      setHintMessage(`💡 Hint 2: ${hintExplanation}`);
+    }
 
-    onHint(); // reduce global hints
+    onHint();
   };
 
-  /* -------- UI -------- */
+  /* ---------- UI ---------- */
 
   return (
-    <div className="text-center">
-      <p className="mb-4 text-xl">{expression}</p>
+    <div className="text-center space-y-6">
+
+      <p className="text-xl font-semibold">{expression}</p>
 
       <input
         type="number"
@@ -1032,32 +1174,51 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
         max="1"
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        className="text-black p-2 rounded"
+        className="text-black p-3 rounded-lg border border-gray-300"
       />
 
-      <button
-        onClick={check}
-        className="ml-3 bg-blue-600 px-4 py-2 rounded"
-      >
-        Check
-      </button>
+      {/* BUTTONS */}
+      <div className="flex justify-center gap-4 mt-4">
 
-      <button
-        onClick={giveHint}
-        disabled={hintsRemaining <= 0 || hintUsedLocally}
-        className="ml-3 bg-yellow-500 px-4 py-2 rounded disabled:opacity-50"
-      >
-        💡 Hint ({hintsRemaining})
-      </button>
+        <button
+          onClick={check}
+          className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 
+                     hover:from-indigo-600 hover:to-purple-700 
+                     text-white font-semibold px-6 py-3 rounded-xl 
+                     shadow-md transition-all duration-200 hover:scale-105"
+        >
+          <CheckCircle size={18} />
+          Check
+        </button>
+
+        <button
+          onClick={giveHint}
+          disabled={hintsRemaining <= 0}
+          className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold
+            transition-all duration-200
+            ${
+              hintsRemaining > 0
+                ? "bg-[#F05537] hover:bg-[#d94a2f] text-white shadow-md hover:scale-105"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }
+          `}
+        >
+          <Lightbulb size={18} />
+          Hint ({hintsRemaining})
+        </button>
+
+      </div>
 
       {message && <p className="mt-3">{message}</p>}
 
       {hintMessage && (
         <p className="mt-3 text-yellow-400">{hintMessage}</p>
       )}
+
     </div>
   );
 }
+
 
 /* ========================= */
 /*     5️⃣ DEDUCTION GRID     */
@@ -1200,7 +1361,7 @@ function DeductionGrid({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
-  const [hintUsedLocally, setHintUsedLocally] = useState(false);
+  //const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(storageKey, input);
@@ -1223,20 +1384,28 @@ function DeductionGrid({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   /* ---------------- HINT LOGIC ---------------- */
 
   const giveHint = () => {
-    if (hintsRemaining <= 0 || hintUsedLocally) return;
+  if (hintsRemaining <= 0) return;
 
-    // Pick a wrong person for the question pet
+  // Hint 1: General strategy
+  if (hintsRemaining === 2) {
+    setHintMessage(
+      "💡 Hint 1: Use elimination. Start with definite clues and remove impossible combinations."
+    );
+  }
+
+  // Hint 2: Specific elimination clue
+  else if (hintsRemaining === 1) {
     const wrongPerson = people.find(
       (p) => p !== correctAnswer
     );
 
-    const hintText = `💡 Hint: ${wrongPerson} does NOT own the ${questionPet}.`;
+    setHintMessage(
+      `💡 Hint 2: ${wrongPerson} does NOT own the ${questionPet}.`
+    );
+  }
 
-    setHintMessage(hintText);
-    setHintUsedLocally(true);
-
-    onHint();
-  };
+  onHint(); // reduce global hints
+};
 
   /* ---------------- FORMAT CLUES ---------------- */
 
@@ -1253,105 +1422,203 @@ function DeductionGrid({ dayOfYear, onComplete, onHint, hintsRemaining }) {
   /* ---------------- UI ---------------- */
 
   return (
-    <div className="text-center">
-      <div className="mb-4 text-left inline-block">
-        {formattedClues.map((c, i) => (
-          <p key={i}>{c}</p>
-        ))}
-      </div>
+  <div className="text-center">
 
-      <p className="mt-4 font-bold">
-        Who owns the {questionPet}?
-      </p>
+    {/* CLUES */}
+    <div className="mb-6 text-left inline-block bg-white/5 p-4 rounded-xl">
+      {formattedClues.map((c, i) => (
+        <p key={i} className="text-sm text-purple-200">{c}</p>
+      ))}
+    </div>
 
-      <input
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Enter name"
-        className="text-black p-2 rounded mt-2"
-      />
+    {/* QUESTION */}
+    <p className="mt-2 font-semibold text-lg">
+      Who owns the {questionPet}?
+    </p>
 
+    {/* INPUT */}
+    <input
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      placeholder="Enter name"
+      className="text-black px-4 py-2 rounded-lg mt-4 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+    />
+
+    {/* BUTTONS */}
+    <div className="flex justify-center gap-4 mt-6">
+
+      {/* CHECK BUTTON */}
       <button
         onClick={check}
-        className="ml-3 bg-blue-600 px-4 py-2 rounded mt-2"
+        className="flex items-center gap-2 
+                   bg-indigo-500 hover:bg-indigo-600
+                   text-white font-medium
+                   px-8 py-3 rounded-xl
+                   transition-all duration-200 shadow-sm"
       >
+        <CheckCircle size={18} />
         Check
       </button>
 
+      {/* HINT BUTTON */}
       <button
         onClick={giveHint}
-        disabled={hintsRemaining <= 0 || hintUsedLocally}
-        className="ml-3 bg-yellow-500 px-4 py-2 rounded mt-2 disabled:opacity-50"
+        disabled={hintsRemaining <= 0}
+        className={`flex items-center gap-2 
+          px-8 py-3 rounded-xl font-medium
+          transition-all duration-200 shadow-sm
+          ${
+            hintsRemaining > 0
+              ? "bg-[#F05537] hover:bg-[#d94a2f] text-white"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+          }
+        `}
       >
-        💡 Hint ({hintsRemaining})
+        <Lightbulb size={18} />
+        Hint
       </button>
 
-      {message && <p className="mt-3">{message}</p>}
-
-      {hintMessage && (
-        <p className="mt-3 text-yellow-400">{hintMessage}</p>
-      )}
     </div>
-  );
+
+    {/* MESSAGES */}
+    {message && <p className="mt-4">{message}</p>}
+
+    {hintMessage && (
+      <p className="mt-4 text-yellow-400">{hintMessage}</p>
+    )}
+
+  </div>
+);
 }
-
-
 function Heatmap() {
-  const year = new Date().getFullYear();
-  const start = new Date(year, 0, 1);
-  const today = new Date();
+  const today = dayjs();
+  const year = today.year();
+
+  const startOfYear = dayjs(`${year}-01-01`);
+  const endOfYear = dayjs(`${year}-12-31`);
+
+  const startDate = startOfYear.startOf("week");
+  const endDate = endOfYear.endOf("week");
 
   const progress = JSON.parse(localStorage.getItem("logic-progress")) || {
     completedDates: {},
+    dailyScores: {},
   };
 
   const days = [];
+  let current = startDate;
 
-  for (let i = 0; i < 365; i++) {
-    const date = new Date(start);
-    date.setDate(start.getDate() + i);
-
-    const dateString = date.toISOString().split("T")[0];
+  while (current.isBefore(endDate) || current.isSame(endDate)) {
+    const dateString = current.format("YYYY-MM-DD");
 
     days.push({
-      dateString,
-      isFuture: date > today,
-      completed: progress.completedDates[dateString],
+      date: dateString,
+      score: progress.dailyScores?.[dateString] || 0,
+      completed: progress.completedDates?.[dateString] || false,
+      month: current.month(),
+      isCurrentYear: current.year() === year,
+      isFuture: current.isAfter(today),
     });
+
+    current = current.add(1, "day");
   }
 
+  // Group into weeks (columns)
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+
+  const getColor = (day) => {
+    if (!day.isCurrentYear) return "bg-transparent";
+    if (day.score === 0) return "bg-gray-200";
+    if (day.score < 300) return "bg-green-200";
+    if (day.score < 500) return "bg-green-400";
+    if (day.score < 800) return "bg-green-600";
+    return "bg-green-800";
+  };
+
+  const monthNames = [
+    "Jan","Feb","Mar","Apr","May","Jun",
+    "Jul","Aug","Sep","Oct","Nov","Dec"
+  ];
+
   return (
-    <div className="mt-10 text-center">
-      <h2 className="text-xl mb-4">📅 Year Activity</h2>
+    <div className="mt-10">
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(53, 12px)",
-          gap: "4px",
-          justifyContent: "center",
-        }}
-      >
-        {days.map((day, index) => {
-          let color = "#d1d5db"; // default gray
+      
+      <div className="overflow-x-auto">
+        <div className="inline-block">
 
-          if (day.isFuture) color = "#f3f4f6";
-          else if (day.completed) color = "#22c55e";
+          {/* MONTH LABELS */}
+          <div className="flex gap-1.5 ml-[34px] mb-2 text-xs text-gray-500">
+            {weeks.map((week, i) => {
+              const firstOfMonth = week.find(
+                (day) =>
+                  day &&
+                  day.isCurrentYear &&
+                  dayjs(day.date).date() === 1
+              );
 
-          return (
-            <div
-              key={index}
-              title={day.dateString}
-              style={{
-                width: "12px",
-                height: "12px",
-                backgroundColor: color,
-                borderRadius: "2px",
-              }}
-            ></div>
-          );
-        })}
+              return (
+                <div key={i} className="w-4 text-center">
+                  {firstOfMonth ? monthNames[firstOfMonth.month] : ""}
+                </div>
+              );
+            })}
+          </div>
+
+
+          <div className="flex">
+
+            {/* WEEKDAY LABELS */}
+            <div className="flex flex-col gap-1 text-xs text-gray-500 pr-2">
+              <span>Sun</span>
+              <span>Mon</span>
+              <span>Tue</span>
+              <span>Wed</span>
+              <span>Thu</span>
+              <span>Fri</span>
+              <span>Sat</span>
+            </div>
+
+            {/* GRID */}
+            <div className="flex gap-1.5">
+              {weeks.map((week, i) => (
+                <div key={i} className="flex flex-col gap-1.5">
+                  {week.map((day) => (
+                    <div
+                      key={day.date}
+                      title={day.date}
+                      className={`
+                        w-4 h-4 rounded-sm transition-transform hover:scale-125
+                        ${day.isFuture ? "bg-gray-100 opacity-30" : getColor(day)}
+                      `}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
       </div>
+
+      {/* LEGEND */}
+      <div className="flex items-center gap-2 mt-4 text-xs text-gray-500">
+        <span>Less</span>
+        <div className="flex gap-1.5">
+          <div className="w-4 h-4 bg-gray-200 rounded-sm" />
+          <div className="w-4 h-4 bg-green-200 rounded-sm" />
+          <div className="w-4 h-4 bg-green-400 rounded-sm" />
+          <div className="w-4 h-4 bg-green-600 rounded-sm" />
+          <div className="w-4 h-4 bg-green-800 rounded-sm" />
+        </div>
+        <span>More</span>
+      </div>
+
     </div>
   );
 }
+
+
