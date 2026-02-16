@@ -1,8 +1,40 @@
+
 import { Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { auth } from "../firebase/config";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+
+  // Listen for auth state
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleStartGame = async () => {
+    // If already logged in → go directly
+    if (user) {
+      navigate("/game");
+      return;
+    }
+
+    // If not logged in → trigger Google login
+    const provider = new GoogleAuthProvider();
+
+    try {
+      await signInWithPopup(auth, provider);
+      navigate("/game"); // go after login
+    } catch (error) {
+      console.error("Login Error:", error);
+    }
+  };
 
   return (
     <div
@@ -13,7 +45,7 @@ export default function Home() {
       }}
     >
       <div className="text-center">
-        {/* TITLE */}
+
         <h1
           style={{
             fontSize: "72px",
@@ -26,7 +58,6 @@ export default function Home() {
           Daily Quest
         </h1>
 
-        {/* SUBTITLE */}
         <p
           style={{
             fontSize: "24px",
@@ -37,9 +68,8 @@ export default function Home() {
           Are you ready for Today's Challenge?
         </p>
 
-        {/* BUTTON */}
         <button
-          onClick={() => navigate("/game")}
+          onClick={handleStartGame}
           style={{
             backgroundColor: "#F05537",
             color: "#FFFFFF",
@@ -58,24 +88,11 @@ export default function Home() {
             cursor: "pointer",
             transition: "all 0.3s ease",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform =
-              "translateY(-3px)";
-            e.currentTarget.style.boxShadow =
-              "0 20px 50px rgba(240, 85, 55, 0.5)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform =
-              "translateY(0)";
-            e.currentTarget.style.boxShadow =
-              "0 15px 40px rgba(240, 85, 55, 0.4)";
-          }}
         >
           <Play size={30} fill="#FFFFFF" />
-          Start Game
+          {user ? "Continue Game" : "Start Game"}
         </button>
-
-        {/* DOTS */}
+          {/* DOTS */}
         <div
           style={{
             marginTop: "80px",
