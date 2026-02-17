@@ -122,6 +122,7 @@ export default function Game() {
           )}
         </>
       )}
+      <Heatmap />
     </div>
   );
 }
@@ -926,6 +927,66 @@ function DeductionGrid({ dayOfYear,onComplete }) {
       </button>
 
       {message && <p className="mt-3">{message}</p>}
+    </div>
+  );
+}
+
+function Heatmap() {
+  const year = new Date().getFullYear();
+  const start = new Date(year, 0, 1);
+  const today = new Date();
+
+  const progress = JSON.parse(localStorage.getItem("logic-progress")) || {
+    completedDates: {},
+  };
+
+  const days = [];
+
+  for (let i = 0; i < 365; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+
+    const dateString = date.toISOString().split("T")[0];
+
+    days.push({
+      dateString,
+      isFuture: date > today,
+      completed: progress.completedDates[dateString],
+    });
+  }
+
+  return (
+    <div className="mt-10 text-center">
+      <h2 className="text-xl mb-4">📅 Year Activity</h2>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(53, 12px)",
+          gap: "4px",
+          justifyContent: "center",
+        }}
+      >
+        {days.map((day, index) => {
+          let color = "#d1d5db"; // default gray
+
+          if (day.isFuture) color = "#f3f4f6";
+          else if (day.completed) color = "#22c55e";
+
+          return (
+            <div
+              key={index}
+              title={day.dateString}
+              style={{
+                width: "12px",
+                height: "12px",
+                backgroundColor: color,
+                borderRadius: "2px",
+              }}
+            ></div>
+          );
+        })}
+      </div>
     </div>
   );
 }
