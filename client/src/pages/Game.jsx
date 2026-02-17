@@ -17,6 +17,7 @@ import { Clock } from "lucide-react";
 import { CheckCircle, Lightbulb } from "lucide-react";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@react-hook/window-size";
+import { generateSeed } from "../utils/seed";
 
 
 import { useState, useEffect } from "react";
@@ -44,11 +45,12 @@ export default function Game() {
       setCurrentDate(new Date());
     }, 60000);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(interval); 
   }, []);
 
   const today = currentDate;
   const todayString = today.toISOString().split("T")[0];
+const globalSeed = generateSeed(todayString);
 
   const start = new Date(today.getFullYear(), 0, 0);
   const diff = today - start;
@@ -374,7 +376,7 @@ return (
   <>
     {puzzleType === "number" && (
       <NumberMatrix
-        dayOfYear={dayOfYear}
+        seed={globalSeed}
         onComplete={markCompleted}
         onHint={useHint}
         hintsRemaining={hintsRemaining}
@@ -382,7 +384,7 @@ return (
     )}
     {puzzleType === "sequence" && (
       <SequenceSolver
-        dayOfYear={dayOfYear}
+        seed={globalSeed}
         onComplete={markCompleted}
         onHint={useHint}
         hintsRemaining={hintsRemaining}
@@ -390,7 +392,7 @@ return (
     )}
     {puzzleType === "pattern" && (
       <PatternMatch
-        dayOfYear={dayOfYear}
+        seed={globalSeed}
         onComplete={markCompleted}
         onHint={useHint}
         hintsRemaining={hintsRemaining}
@@ -398,7 +400,7 @@ return (
     )}
     {puzzleType === "binary" && (
       <BinaryLogic
-        dayOfYear={dayOfYear}
+        seed={globalSeed}
         onComplete={markCompleted}
         onHint={useHint}
         hintsRemaining={hintsRemaining}
@@ -406,7 +408,7 @@ return (
     )}
     {puzzleType === "deduction" && (
       <DeductionGrid
-        dayOfYear={dayOfYear}
+        seed={globalSeed}
         onComplete={markCompleted}
         onHint={useHint}
         hintsRemaining={hintsRemaining}
@@ -459,8 +461,8 @@ return (
 /*      1️⃣ NUMBER MATRIX    */
 /* ========================= */
 
-function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
-  const storageKey = `logic-number-${dayOfYear}`;
+function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
+  const storageKey = `logic-number-${seed}`;
 
   /* ---------------- BASE VALID SOLUTION ---------------- */
 
@@ -497,12 +499,12 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   /* ---------------- GENERATE SOLUTION ---------------- */
 
-  let solution = seededSwapRows(baseSolution, dayOfYear);
-  solution = seededSwapCols(solution, dayOfYear);
+  let solution = seededSwapRows(baseSolution, seed);
+  solution = seededSwapCols(solution, seed);
 
   /* ---------------- DIFFICULTY SCALING ---------------- */
 
-  const blanks = 4 + Math.floor(rand() * 8);
+  const blanks = 4 + (seed % 6);
 
   function generatePuzzle(sol, seed) {
     const puzzle = sol.map((row) => [...row]);
@@ -522,7 +524,7 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     return puzzle;
   }
 
-  const puzzle = generatePuzzle(solution, dayOfYear);
+  const puzzle = generatePuzzle(solution, seed);
 
   /* ---------------- STATE ---------------- */
 
@@ -710,9 +712,8 @@ function NumberMatrix({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 /*     2️⃣ SEQUENCE SOLVER   */
 /* ========================= */
 
-function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
-  const year = new Date().getFullYear();
-  const seed = year * 1000 + dayOfYear;
+function SequenceSolver({ seed, onComplete, onHint, hintsRemaining }) {
+  
 
   function createSeededRandom(seed) {
     let value = seed;
@@ -775,7 +776,7 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     ruleDescription = `Power sequence (Powers of ${base})`;
   }
 
-  const storageKey = `logic-sequence-${year}-${dayOfYear}`;
+  const storageKey = `logic-sequence-${seed}`;
 
   const [input, setInput] = useState(() => {
     const saved = localStorage.getItem(storageKey);
@@ -881,9 +882,8 @@ function SequenceSolver({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 /*      3️⃣ PATTERN MATCH     */
 /* ========================= */
 
-function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
-  const year = new Date().getFullYear();
-  const seed = year * 1000 + dayOfYear;
+function PatternMatch({ seed, onComplete, onHint, hintsRemaining }) {
+
 
   function createSeededRandom(seed) {
     let value = seed;
@@ -951,7 +951,7 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     ruleDescription = "Mirror pattern (Second half mirrors first half)";
   }
 
-  const storageKey = `logic-pattern-${year}-${dayOfYear}`;
+  const storageKey = `logic-pattern-${seed}`;
 
   const [choice, setChoice] = useState(() => {
     const saved = localStorage.getItem(storageKey);
@@ -1069,9 +1069,8 @@ function PatternMatch({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 /*      4️⃣ BINARY LOGIC      */
 /* ========================= */
 
-function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
-  const year = new Date().getFullYear();
-  const seed = year * 1000 + dayOfYear;
+function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
+
 
   function createSeededRandom(seed) {
     let value = seed;
@@ -1127,7 +1126,7 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
     hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
 
-  const storageKey = `logic-binary-${year}-${dayOfYear}`;
+  const storageKey = `logic-binary-${seed}`;
 
   const [input, setInput] = useState(() => {
     const saved = localStorage.getItem(storageKey);
@@ -1228,9 +1227,8 @@ function BinaryLogic({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 /*     5️⃣ DEDUCTION GRID     */
 /* ========================= */
 
-function DeductionGrid({ dayOfYear, onComplete, onHint, hintsRemaining }) {
-  const year = new Date().getFullYear();
-  const seed = year * 1000 + dayOfYear;
+function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
+
 
   /* ---------------- SEEDED RANDOM ---------------- */
 
@@ -1356,7 +1354,7 @@ function DeductionGrid({ dayOfYear, onComplete, onHint, hintsRemaining }) {
 
   /* ---------------- STATE ---------------- */
 
-  const storageKey = `logic-deduction-${year}-${dayOfYear}`;
+  const storageKey = `logic-deduction-${seed}`;
 
   const [input, setInput] = useState(() => {
     const saved = localStorage.getItem(storageKey);
