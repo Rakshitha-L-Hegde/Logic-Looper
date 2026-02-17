@@ -50,7 +50,8 @@ export default function Game() {
 
   const today = currentDate;
   const todayString = today.toISOString().split("T")[0];
-const globalSeed = generateSeed(todayString);
+
+  const globalSeed = generateSeed(todayString);
 
   const start = new Date(today.getFullYear(), 0, 0);
   const diff = today - start;
@@ -314,7 +315,7 @@ return (
           color: '#190482'
         }}
       >
-        Puzzle Complete!
+        Puzzle Complete! Great job!
       </h4>
     </div>
 
@@ -505,6 +506,7 @@ function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
   /* ---------------- DIFFICULTY SCALING ---------------- */
 
   const blanks = 4 + (seed % 6);
+
 
   function generatePuzzle(sol, seed) {
     const puzzle = sol.map((row) => [...row]);
@@ -883,8 +885,6 @@ function SequenceSolver({ seed, onComplete, onHint, hintsRemaining }) {
 /* ========================= */
 
 function PatternMatch({ seed, onComplete, onHint, hintsRemaining }) {
-
-
   function createSeededRandom(seed) {
     let value = seed;
     return function () {
@@ -952,6 +952,7 @@ function PatternMatch({ seed, onComplete, onHint, hintsRemaining }) {
   }
 
   const storageKey = `logic-pattern-${seed}`;
+
 
   const [choice, setChoice] = useState(() => {
     const saved = localStorage.getItem(storageKey);
@@ -1071,7 +1072,6 @@ function PatternMatch({ seed, onComplete, onHint, hintsRemaining }) {
 
 function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
 
-
   function createSeededRandom(seed) {
     let value = seed;
     return function () {
@@ -1126,7 +1126,9 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
     hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
 
+
   const storageKey = `logic-binary-${seed}`;
+
 
   const [input, setInput] = useState(() => {
     const saved = localStorage.getItem(storageKey);
@@ -1228,7 +1230,6 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
 /* ========================= */
 
 function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
-
 
   /* ---------------- SEEDED RANDOM ---------------- */
 
@@ -1355,6 +1356,7 @@ function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
   /* ---------------- STATE ---------------- */
 
   const storageKey = `logic-deduction-${seed}`;
+
 
   const [input, setInput] = useState(() => {
     const saved = localStorage.getItem(storageKey);
