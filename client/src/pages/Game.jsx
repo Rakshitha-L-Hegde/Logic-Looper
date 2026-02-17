@@ -18,6 +18,13 @@ import { CheckCircle, Lightbulb } from "lucide-react";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@react-hook/window-size";
 import { generateSeed } from "../utils/seed";
+import {
+  saveProgress,
+  getProgress,
+  saveMeta,
+  getMeta
+} from "../lib/db";
+import { savePuzzle, getPuzzle } from "../lib/db";
 
 
 import { useState, useEffect } from "react";
@@ -71,13 +78,18 @@ export default function Game() {
   /* ---------------- LOAD PROGRESS ---------------- */
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("logic-progress")) || {
-      completedDates: {},
-      streak: 0,
-      lastCompleted: null,
-      dailyScores: {},
-      dailyTimes: {},
-    };
+  async function loadProgress() {
+    let saved = await getProgress("logic-progress");
+
+    if (!saved) {
+      saved = {
+        completedDates: {},
+        streak: 0,
+        lastCompleted: null,
+        dailyScores: {},
+        dailyTimes: {},
+      };
+    }
 
     setStreak(saved.streak);
 
@@ -89,13 +101,13 @@ export default function Game() {
       setTimeTaken(saved.dailyTimes?.[todayString] || null);
       setStartTime(null);
     } else {
-      const storedStart = localStorage.getItem(`logic-start-${todayString}`);
+      const storedStart = await getMeta(`logic-start-${todayString}`);
 
       if (storedStart) {
-        setStartTime(Number(storedStart));
+        setStartTime(storedStart);
       } else {
         const now = Date.now();
-        localStorage.setItem(`logic-start-${todayString}`, now);
+        await saveMeta(`logic-start-${todayString}`, now);
         setStartTime(now);
       }
 
@@ -103,21 +115,25 @@ export default function Game() {
       setScore(null);
     }
 
-    const savedHints = JSON.parse(localStorage.getItem(hintKey));
+    const savedHints = await getMeta(`logic-hints-${todayString}`);
 
     if (savedHints) {
       setHintsRemaining(savedHints.remaining);
       setHintsUsed(savedHints.used);
     } else {
-      localStorage.setItem(
-        hintKey,
-        JSON.stringify({ remaining: 2, used: 0 })
-      );
+      await saveMeta(`logic-hints-${todayString}`, {
+        remaining: 2,
+        used: 0,
+      });
+
       setHintsRemaining(2);
       setHintsUsed(0);
     }
+  }
 
-  }, [todayString]);
+  loadProgress();
+}, [todayString]);
+
 
   /* ---------------- LIVE TIMER ---------------- */
 
@@ -157,86 +173,78 @@ export default function Game() {
 
   /* ---------------- USE HINT ---------------- */
 
-  const useHint = () => {
-    if (hintsRemaining <= 0 || isCompleted) return;
+  const useHint = async () => {
+  if (hintsRemaining <= 0 || isCompleted) return;
 
-    const newRemaining = hintsRemaining - 1;
-    const newUsed = hintsUsed + 1;
+  const newRemaining = hintsRemaining - 1;
+  const newUsed = hintsUsed + 1;
 
-    setHintsRemaining(newRemaining);
-    setHintsUsed(newUsed);
+  setHintsRemaining(newRemaining);
+  setHintsUsed(newUsed);
 
-    localStorage.setItem(
-      hintKey,
-      JSON.stringify({
-        remaining: newRemaining,
-        used: newUsed,
-      })
-    );
-  };
+  await saveMeta(hintKey, {
+    remaining: newRemaining,
+    used: newUsed,
+  });
+};
+
 
   /* ---------------- MARK COMPLETE ---------------- */
 
-  const markCompleted = () => {
-    console.log("MARK COMPLETED CALLED");
-    const saved = JSON.parse(localStorage.getItem("logic-progress")) || {
+ const markCompleted = async () => {
+  let saved = await getProgress("logic-progress");
+
+  if (!saved) {
+    saved = {
       completedDates: {},
       streak: 0,
       lastCompleted: null,
       dailyScores: {},
       dailyTimes: {},
     };
+  }
 
-    if (saved.completedDates[todayString]) return;
+  if (saved.completedDates[todayString]) return;
 
-    saved.completedDates[todayString] = true;
+  saved.completedDates[todayString] = true;
 
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayString = yesterday.toISOString().split("T")[0];
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayString = yesterday.toISOString().split("T")[0];
 
-    if (saved.lastCompleted === yesterdayString) {
-      saved.streak += 1;
-    } else {
-      saved.streak = 1;
-    }
+  if (saved.lastCompleted === yesterdayString) {
+    saved.streak += 1;
+  } else {
+    saved.streak = 1;
+  }
 
-    saved.lastCompleted = todayString;
+  saved.lastCompleted = todayString;
 
-    /* ✅ FIXED TIMER FREEZE */
-    const seconds = liveSeconds;
+  const seconds = liveSeconds;
+  setTimeTaken(seconds);
+  await saveMeta(`logic-start-${todayString}`, null);
 
-    setTimeTaken(seconds);
-    localStorage.removeItem(`logic-start-${todayString}`);
+  const difficultyBonus = Math.floor((dayOfYear / 365) * 50);
+  const streakBonus = saved.streak * 5;
 
-    /* -------- SCORE -------- */
+  let finalScore = 100 + difficultyBonus + streakBonus - seconds;
 
-    const difficultyBonus = Math.floor((dayOfYear / 365) * 50);
-    const streakBonus = saved.streak * 5;
+  if (finalScore < 10) finalScore = 10;
 
-    let finalScore = 100 + difficultyBonus + streakBonus - seconds;
+  finalScore = Math.floor(
+    finalScore * Math.pow(0.9, hintsUsed)
+  );
 
-    if (finalScore < 10) finalScore = 10;
+  setScore(finalScore);
 
-    finalScore = Math.floor(
-      finalScore * Math.pow(0.9, hintsUsed)
-    );
+  saved.dailyScores[todayString] = finalScore;
+  saved.dailyTimes[todayString] = seconds;
 
-    setScore(finalScore);
+  await saveProgress("logic-progress", saved);
 
-    /* -------- SAVE DATA -------- */
-
-    saved.dailyScores[todayString] = finalScore;
-    saved.dailyTimes[todayString] = seconds;
-
-    localStorage.setItem("logic-progress", JSON.stringify(saved));
-
-    setStreak(saved.streak);
-    setIsCompleted(true);
-    console.log("Setting isCompleted TRUE");
-
-  };
-
+  setStreak(saved.streak);
+  setIsCompleted(true);
+};
 
   /* ---------------- UI ---------------- */
 
@@ -530,23 +538,37 @@ function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
 
   /* ---------------- STATE ---------------- */
 
-  const [grid, setGrid] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) return JSON.parse(saved);
-    return puzzle.map((row) => [...row]);
-  });
+  const [grid, setGrid] = useState(null);
+
 
   const [message, setMessage] = useState("");
   const [hintedCells, setHintedCells] = useState([]);
 
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(grid));
-  }, [grid, storageKey]);
+  async function loadPuzzle() {
+    const saved = await getPuzzle(storageKey);
+
+    if (saved) {
+      setGrid(saved);
+    } else {
+      setGrid(puzzle.map((row) => [...row]));
+    }
+  }
+
+  loadPuzzle();
+}, [storageKey]);
+
+useEffect(() => {
+  if (grid) {
+    savePuzzle(storageKey, grid);
+  }
+}, [grid, storageKey]);
+
 
   /* ---------------- HINT LOGIC ---------------- */
 
   const giveHint = () => {
-  if (hintsRemaining <= 0) return;
+  if (!grid || hintsRemaining <= 0) return;
 
   if (hintsRemaining === 2) {
     setMessage("💡 Hint 1: Check row and column uniqueness.");
@@ -609,7 +631,7 @@ function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
 
   const handleChange = (r, c, val) => {
     if (val > 4 || val < 1) return;
-
+    if (!grid) return;
     const copy = grid.map((row) => [...row]);
     copy[r][c] = Number(val);
     setGrid(copy);
@@ -640,6 +662,7 @@ function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
   <div className="text-center">
 
     {/* GRID */}
+    {grid && (
     <div className="grid grid-cols-4 gap-3 justify-center mb-6">
       {grid.map((row, r) =>
         row.map((cell, c) => {
@@ -664,6 +687,7 @@ function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
         })
       )}
     </div>
+    )}
 
     {/* BUTTONS */}
     <div className="flex justify-center gap-4 mt-4">
@@ -780,17 +804,31 @@ function SequenceSolver({ seed, onComplete, onHint, hintsRemaining }) {
 
   const storageKey = `logic-sequence-${seed}`;
 
-  const [input, setInput] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved || "";
-  });
+ const [input, setInput] = useState(null);
+
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(storageKey, input);
-  }, [input, storageKey]);
+  async function loadSequence() {
+    const saved = await getPuzzle(storageKey);
+
+    if (saved !== undefined && saved !== null) {
+      setInput(saved);
+    } else {
+      setInput("");
+    }
+  }
+
+  loadSequence();
+}, [storageKey]);
+
+  useEffect(() => {
+  if (input !== null) {
+    savePuzzle(storageKey, input);
+  }
+}, [input, storageKey]);
 
   const check = () => {
     if (Number(input) === answer) {
@@ -826,7 +864,7 @@ function SequenceSolver({ seed, onComplete, onHint, hintsRemaining }) {
 
       {/* ✅ INPUT IMPROVED */}
       <input
-        value={input}
+        value={input ?? ""}
         onChange={(e) => setInput(e.target.value)}
         className="text-black px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       />
@@ -1130,17 +1168,30 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
   const storageKey = `logic-binary-${seed}`;
 
 
-  const [input, setInput] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved || "";
-  });
+  const [input, setInput] = useState(null);
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(storageKey, input);
-  }, [input, storageKey]);
+  async function loadBinary() {
+    const saved = await getPuzzle(storageKey);
+
+    if (saved !== undefined && saved !== null) {
+      setInput(saved);
+    } else {
+      setInput("");
+    }
+  }
+
+  loadBinary();
+}, [storageKey]);
+
+useEffect(() => {
+  if (input !== null) {
+    savePuzzle(storageKey, input);
+  }
+}, [input, storageKey]);
 
   const check = () => {
     if (Number(input) === result) {
@@ -1177,7 +1228,7 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
         type="number"
         min="0"
         max="1"
-        value={input}
+        value={input ?? ""}
         onChange={(e) => setInput(e.target.value)}
         className="text-black p-3 rounded-lg border border-gray-300"
       />
@@ -1358,32 +1409,50 @@ function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
   const storageKey = `logic-deduction-${seed}`;
 
 
-  const [input, setInput] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved || "";
-  });
+ const [input, setInput] = useState(null);
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
   //const [hintUsedLocally, setHintUsedLocally] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(storageKey, input);
-  }, [input, storageKey]);
+  async function loadDeduction() {
+    const saved = await getPuzzle(storageKey);
+
+    if (saved !== undefined && saved !== null) {
+      setInput(saved);
+    } else {
+      setInput("");
+    }
+  }
+
+  loadDeduction();
+}, [storageKey]);
+
+useEffect(() => {
+  if (input !== null) {
+    savePuzzle(storageKey, input);
+  }
+}, [input, storageKey]);
 
   /* ---------------- CHECK ---------------- */
 
   const check = () => {
-    const normalizedInput = input.trim().toLowerCase();
-    const normalizedAnswer = correctAnswer.toLowerCase();
+  if (!input) {
+    setMessage("❌ Enter an answer first.");
+    return;
+  }
 
-    if (normalizedInput === normalizedAnswer) {
-      setMessage("🎉 Correct!");
-      onComplete();
-    } else {
-      setMessage("❌ Incorrect!");
-    }
-  };
+  const normalizedInput = input.trim().toLowerCase();
+  const normalizedAnswer = correctAnswer.toLowerCase();
+
+  if (normalizedInput === normalizedAnswer) {
+    setMessage("🎉 Correct!");
+    onComplete();
+  } else {
+    setMessage("❌ Incorrect!");
+  }
+};
 
   /* ---------------- HINT LOGIC ---------------- */
 
@@ -1442,7 +1511,7 @@ function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
 
     {/* INPUT */}
     <input
-      value={input}
+      value={input ?? ""}
       onChange={(e) => setInput(e.target.value)}
       placeholder="Enter name"
       className="text-black px-4 py-2 rounded-lg mt-4 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400"
