@@ -32,6 +32,41 @@ app.get("/", async (req, res) => {
 }
 });
 
+app.post("/api/sync", async (req, res) => {
+  try {
+    const { date, score, time, streak } = req.body;
+
+    // Basic validation
+    if (!date || score < 0 || time < 0) {
+      return res.status(400).json({ error: "Invalid data" });
+    }
+
+    // Prevent future date cheating
+    const today = new Date().toISOString().split("T")[0];
+    if (date > today) {
+      return res.status(400).json({ error: "Future date not allowed" });
+    }
+
+    // Insert into DB
+    await pool.query(
+      `INSERT INTO daily_scores (date, score, time_taken)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (date)
+       DO UPDATE SET
+         score = EXCLUDED.score,
+         time_taken = EXCLUDED.time_taken`,
+      [date, score, time]
+    );
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error("Sync error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 const PORT = 5000;
 
 app.listen(PORT, () => {

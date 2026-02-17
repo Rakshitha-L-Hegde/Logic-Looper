@@ -18,14 +18,8 @@ import { CheckCircle, Lightbulb } from "lucide-react";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@react-hook/window-size";
 import { generateSeed } from "../utils/seed";
-import {
-  saveProgress,
-  getProgress,
-  saveMeta,
-  getMeta
-} from "../lib/db";
 import { savePuzzle, getPuzzle } from "../lib/db";
-
+import { getProgress, saveProgress, getMeta, saveMeta } from "../lib/db";
 
 import { useState, useEffect } from "react";
 
@@ -239,6 +233,23 @@ export default function Game() {
 
   saved.dailyScores[todayString] = finalScore;
   saved.dailyTimes[todayString] = seconds;
+
+  try {
+  await fetch("http://localhost:5000/api/sync", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      date: todayString,
+      score: finalScore,
+      time: seconds,
+      streak: saved.streak,
+    }),
+  });
+} catch (error) {
+  console.error("Sync failed:", error);
+}
 
   await saveProgress("logic-progress", saved);
 
