@@ -13,6 +13,9 @@ function StatCard({ title, value, highlight }) {
 /*        GAME ROOT          */
 /* ========================= */
 import dayjs from "dayjs";
+
+import dayOfYear from "dayjs/plugin/dayOfYear";
+dayjs.extend(dayOfYear);
 import { Clock } from "lucide-react";
 import { CheckCircle, Lightbulb } from "lucide-react";
 import Confetti from "react-confetti";
@@ -22,7 +25,9 @@ import { savePuzzle, getPuzzle } from "../lib/db";
 import { getProgress, saveProgress, getMeta, saveMeta } from "../lib/db";
 import React, { useMemo } from "react";
 
+
 import { useState, useEffect } from "react";
+
 
 const puzzleTypes = ["number", "sequence", "pattern", "binary", "deduction"];
 
@@ -33,6 +38,9 @@ export default function Game() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [timeTaken, setTimeTaken] = useState(null);
   const [score, setScore] = useState(null);
+  const [safeDate, setSafeDate] = useState(dayjs().format("YYYY-MM-DD"));
+  const [securityWarning, setSecurityWarning] = useState(null);
+  const [isLocked, setIsLocked] = useState(false);
 
   /* ---------------- DATE + STREAK ---------------- */
 
@@ -50,15 +58,13 @@ export default function Game() {
     return () => clearInterval(interval); 
   }, []);
 
-  const today = currentDate;
-  const todayString = today.toISOString().split("T")[0];
+  const systemToday = dayjs().format("YYYY-MM-DD");
+const todayString = safeDate;
 
   const globalSeed = generateSeed(todayString);
 
-  const start = new Date(today.getFullYear(), 0, 0);
-  const diff = today - start;
-  const oneDay = 1000 * 60 * 60 * 24;
-  const dayOfYear = Math.floor(diff / oneDay);
+  const safeDayObj = dayjs(todayString);
+const dayOfYear = safeDayObj.dayOfYear();
 
   const typeIndex = dayOfYear % puzzleTypes.length;
   const puzzleType = puzzleTypes[typeIndex];
@@ -76,6 +82,8 @@ export default function Game() {
   async function loadProgress() {
     let saved = await getProgress("logic-progress");
 
+    
+
     if (!saved) {
       saved = {
         completedDates: {},
@@ -83,68 +91,82 @@ export default function Game() {
         lastCompleted: null,
         dailyScores: {},
         dailyTimes: {},
+        lastSeenDate: systemToday,
       };
+      await saveProgress("logic-progress", saved);
     }
 
+    
+
+    const lastSeen = dayjs(saved.lastSeenDate);
+    const current = dayjs(systemToday);
+
+    // 🚫 Backward manipulation
+    if (current.isBefore(lastSeen)) {
+      setSecurityWarning("⚠ System date change detected. Backward date manipulation detected!!");
+      setSafeDate(saved.lastSeenDate);
+      setIsLocked(true);
+    }
+
+    // 🚫 Jump forward more than 1 day
+    else if (current.diff(lastSeen, "day") > 1) {
+      setSecurityWarning("⚠ System date change detected. Forward date manipulation detected!!");
+      setSafeDate(saved.lastSeenDate);
+      setIsLocked(true);
+    }
+
+    else {
+      setSafeDate(systemToday);
+      saved.lastSeenDate = systemToday;
+      await saveProgress("logic-progress", saved);
+      setIsLocked(false);
+    }
+    // ---------------- LOAD START TIME ----------------
+
+const alreadyCompleted = !!saved.completedDates[todayString];
+setIsCompleted(alreadyCompleted);
+
+if (alreadyCompleted) {
+  const storedTime = saved.dailyTimes?.[todayString] || 0;
+  const storedScore = saved.dailyScores?.[todayString] || 0;
+
+  setTimeTaken(storedTime);
+  setScore(storedScore);   // ✅ THIS WAS MISSING
+  setStartTime(null);
+}
+else {
+  const storedStart = await getMeta(`logic-start-${todayString}`);
+
+  if (storedStart) {
+    setStartTime(storedStart);
+  } else {
+    const now = Date.now();
+    await saveMeta(`logic-start-${todayString}`, now);
+    setStartTime(now);
+  }
+}
     setStreak(saved.streak);
-
-    const alreadyCompleted = !!saved.completedDates[todayString];
-    setIsCompleted(alreadyCompleted);
-
-    if (alreadyCompleted) {
-      setScore(saved.dailyScores?.[todayString] || null);
-      setTimeTaken(saved.dailyTimes?.[todayString] || null);
-      setStartTime(null);
-    } else {
-      const storedStart = await getMeta(`logic-start-${todayString}`);
-
-      if (storedStart) {
-        setStartTime(storedStart);
-      } else {
-        const now = Date.now();
-        await saveMeta(`logic-start-${todayString}`, now);
-        setStartTime(now);
-      }
-
-      setTimeTaken(null);
-      setScore(null);
-    }
-
-    const savedHints = await getMeta(`logic-hints-${todayString}`);
-
-    if (savedHints) {
-      setHintsRemaining(savedHints.remaining);
-      setHintsUsed(savedHints.used);
-    } else {
-      await saveMeta(`logic-hints-${todayString}`, {
-        remaining: 2,
-        used: 0,
-      });
-
-      setHintsRemaining(2);
-      setHintsUsed(0);
-    }
   }
 
   loadProgress();
-}, [todayString]);
+}, [systemToday]);
 
 
   /* ---------------- LIVE TIMER ---------------- */
 
   useEffect(() => {
-    if (!isCompleted && startTime) {
+    if (!isCompleted && startTime  && !isLocked) {
       const timer = setInterval(() => {
         setCurrentTime(Date.now());
       }, 1000);
 
       return () => clearInterval(timer);
     }
-  }, [isCompleted, startTime]);
+  }, [isCompleted, startTime, isLocked]);
 
   /* ✅ FIXED HERE */
   const liveSeconds =
-    !isCompleted && startTime
+    !isCompleted && startTime && !isLocked
       ? Math.max(0, Math.floor((currentTime - startTime) / 1000))
       : timeTaken ?? 0;
 
@@ -185,10 +207,34 @@ export default function Game() {
 
 
   /* ---------------- MARK COMPLETE ---------------- */
-
+ 
  const markCompleted = async (difficultyLevel = 0) => {
+  if (isLocked) {
+    console.log("Game is locked");
+    return;
+  }
   let saved = await getProgress("logic-progress");
+// 🛡 Prevent device time going backwards
+if (
+  saved?.lastCompletedTimestamp &&
+  Date.now() < saved.lastCompletedTimestamp
+) {
+  console.warn("⚠ Device time manipulation detected.");
+  return;
+}
+ 
+// 🛡 Prevent jumping multiple days forward
+if (saved.lastCompleted) {
+  const last = dayjs(saved.lastCompleted);
+  const todayCheck = dayjs(todayString);
 
+  if (todayCheck.diff(last, "day") > 1) {
+    console.warn("⚠ Future date manipulation detected.");
+    return;
+  }
+}
+
+  
   if (!saved) {
     saved = {
       completedDates: {},
@@ -199,13 +245,13 @@ export default function Game() {
     };
   }
 
-  if (saved.completedDates[todayString]) return;
+  //if (saved.completedDates[todayString]) return;
 
   saved.completedDates[todayString] = true;
 
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayString = yesterday.toISOString().split("T")[0];
+  const yesterdayString = dayjs(todayString)
+  .subtract(1, "day")
+  .format("YYYY-MM-DD");
 
   if (saved.lastCompleted === yesterdayString) {
     saved.streak += 1;
@@ -214,6 +260,8 @@ export default function Game() {
   }
 
   saved.lastCompleted = todayString;
+  saved.lastCompletedTimestamp = Date.now();
+
 
   const seconds = liveSeconds;
   setTimeTaken(seconds);
@@ -251,7 +299,7 @@ saved.dailyDifficulty[todayString] = difficultyLevel;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      date: todayString,
+      date: dayjs().format("YYYY-MM-DD"),
       score: finalScore,
       time: seconds,
       streak: saved.streak,
@@ -272,6 +320,29 @@ saved.dailyDifficulty[todayString] = difficultyLevel;
 return (
   <div className="min-h-screen bg-gradient-to-br from-purple-600 to-indigo-900 p-8">
     <div className="max-w-6xl mx-auto text-white">
+      {isLocked ? (
+
+  <div className="text-center mt-20">
+    <div className="text-3xl font-bold text-red-400 mb-4">
+      🚫 Game Locked
+    </div>
+
+    <p className="text-lg text-red-200">
+      System date manipulation detected.
+    </p>
+
+    <p className="mt-4 text-purple-200">
+      Please restore correct system date.
+    </p>
+  </div>
+
+) : (
+<>
+    {securityWarning && (
+  <div className="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-400 text-red-200 text-center font-semibold">
+    {securityWarning}
+  </div>
+)}
 
       {/* HEADER */}
       <div className="text-center mb-10">
@@ -300,12 +371,19 @@ return (
 </div>
 
 
-        <div>
-          <p className="text-sm opacity-70">Hints Remaining</p>
-          <p className="text-2xl font-bold text-orange-400">
-            {hintsRemaining}
-          </p>
-        </div>
+        <div className="flex items-center gap-4">
+  <div className="bg-white/20 p-3 rounded-xl">
+    <Lightbulb size={22} className="text-white" />
+  </div>
+
+  <div>
+    <p className="text-sm opacity-70">Hints</p>
+    <p className="text-2xl font-bold text-orange-400">
+      {hintsRemaining}
+    </p>
+  </div>
+</div>
+
 
         <div>
           <p className="text-sm opacity-70">Puzzle Type</p>
@@ -320,133 +398,145 @@ return (
       {/* MAIN GAME AREA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* PUZZLE CARD */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-10 text-indigo-900 shadow-2xl">
+        
+       {/* PUZZLE CARD */}
+<div className="lg:col-span-2 bg-white rounded-2xl p-10 text-indigo-900 shadow-2xl">
 
-          {isCompleted ? (
+  {isLocked ? (
 
-  <div
-    className="mt-6 p-6 rounded-xl"
-    style={{
-      backgroundColor: '#DDF2FD',
-      border: '3px solid #525CEB'
-    }}
-  >
-    <div className="text-center mb-4">
-      <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
-        🎉
-      </div>
+    <div className="text-center text-red-300 font-bold text-xl">
+      🚫 Game Locked Due To Date Manipulation
+    </div>
 
-      <h4
+  ) : isCompleted ? (
+
+    <>
+      <div
+        className="mt-6 p-6 rounded-xl"
         style={{
-          fontSize: '1.5rem',
-          fontWeight: '700',
-          color: '#190482'
+          backgroundColor: '#DDF2FD',
+          border: '3px solid #525CEB'
         }}
       >
-        Puzzle Complete! Great job!
-      </h4>
-    </div>
+        <div className="text-center mb-4">
+          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
+            🎉
+          </div>
 
-    <div className="grid grid-cols-2 gap-4">
-      <div
-        className="p-4 rounded-lg text-center"
-        style={{ backgroundColor: '#FFFFFF' }}
-      >
-        <div
-          style={{
-            fontSize: '0.875rem',
-            color: '#7752FE',
-            fontWeight: '600'
-          }}
-        >
-          Time Taken
+          <h4
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: '700',
+              color: '#190482'
+            }}
+          >
+            Puzzle Complete! Great job!
+          </h4>
         </div>
 
-        <div
-          style={{
-            fontSize: '2rem',
-            fontWeight: '700',
-            color: '#190482'
-          }}
-        >
-          {formatTime(timeTaken)}
+        <div className="grid grid-cols-2 gap-4">
+          <div
+            className="p-4 rounded-lg text-center"
+            style={{ backgroundColor: '#FFFFFF' }}
+          >
+            <div
+              style={{
+                fontSize: '0.875rem',
+                color: '#7752FE',
+                fontWeight: '600'
+              }}
+            >
+              Time Taken
+            </div>
+
+            <div
+              style={{
+                fontSize: '2rem',
+                fontWeight: '700',
+                color: '#190482'
+              }}
+            >
+              {formatTime(timeTaken)}
+            </div>
+          </div>
+
+          <div
+            className="p-4 rounded-lg text-center"
+            style={{ backgroundColor: '#FFFFFF' }}
+          >
+            <div
+              style={{
+                fontSize: '0.875rem',
+                color: '#F05537',
+                fontWeight: '600'
+              }}
+            >
+              Final Score
+            </div>
+
+            <div
+              style={{
+                fontSize: '2rem',
+                fontWeight: '700',
+                color: '#190482'
+              }}
+            >
+              {score}
+            </div>
+          </div>
         </div>
       </div>
+    </>
 
-      <div
-        className="p-4 rounded-lg text-center"
-        style={{ backgroundColor: '#FFFFFF' }}
-      >
-        <div
-          style={{
-            fontSize: '0.875rem',
-            color: '#F05537',
-            fontWeight: '600'
-          }}
-        >
-          Final Score
-        </div>
+  ) : (
 
-        <div
-          style={{
-            fontSize: '2rem',
-            fontWeight: '700',
-            color: '#190482'
-          }}
-        >
-          {score}
-        </div>
-      </div>
-    </div>
-  </div>
+    <>
+      {puzzleType === "number" && (
+        <NumberMatrix
+          seed={globalSeed}
+          onComplete={markCompleted}
+          onHint={useHint}
+          hintsRemaining={hintsRemaining}
+        />
+      )}
+      {puzzleType === "sequence" && (
+        <SequenceSolver
+          seed={globalSeed}
+          onComplete={markCompleted}
+          onHint={useHint}
+          hintsRemaining={hintsRemaining}
+        />
+      )}
+      {puzzleType === "pattern" && (
+        <PatternMatch
+          seed={globalSeed}
+          onComplete={markCompleted}
+          onHint={useHint}
+          hintsRemaining={hintsRemaining}
+        />
+      )}
+      {puzzleType === "binary" && (
+        <BinaryLogic
+          seed={globalSeed}
+          onComplete={markCompleted}
+          onHint={useHint}
+          hintsRemaining={hintsRemaining}
+        />
+      )}
+      {puzzleType === "deduction" && (
+        <DeductionGrid
+          seed={globalSeed}
+          onComplete={markCompleted}
+          onHint={useHint}
+          hintsRemaining={hintsRemaining}
+        />
+      )}
+    </>
 
-) : (
+  )}
 
-  <>
-    {puzzleType === "number" && (
-      <NumberMatrix
-        seed={globalSeed}
-        onComplete={markCompleted}
-        onHint={useHint}
-        hintsRemaining={hintsRemaining}
-      />
-    )}
-    {puzzleType === "sequence" && (
-      <SequenceSolver
-        seed={globalSeed}
-        onComplete={markCompleted}
-        onHint={useHint}
-        hintsRemaining={hintsRemaining}
-      />
-    )}
-    {puzzleType === "pattern" && (
-      <PatternMatch
-        seed={globalSeed}
-        onComplete={markCompleted}
-        onHint={useHint}
-        hintsRemaining={hintsRemaining}
-      />
-    )}
-    {puzzleType === "binary" && (
-      <BinaryLogic
-        seed={globalSeed}
-        onComplete={markCompleted}
-        onHint={useHint}
-        hintsRemaining={hintsRemaining}
-      />
-    )}
-    {puzzleType === "deduction" && (
-      <DeductionGrid
-        seed={globalSeed}
-        onComplete={markCompleted}
-        onHint={useHint}
-        hintsRemaining={hintsRemaining}
-      />
-    )}
-  </>
-)}
-        </div>
+</div>
+
 
         {/* SIDE PANEL */}
         <div className="p-6 rounded-2xl bg-white/10 backdrop-blur-lg">
@@ -463,7 +553,7 @@ return (
 
           <div className="mt-6 p-4 rounded-xl bg-orange-500/20">
             <p className="text-sm font-semibold">
-              💡 Current Streak
+              🔥 Current Streak
             </p>
             <p className="text-3xl font-bold mt-1">
               {streak} Days
@@ -478,8 +568,10 @@ return (
         <h3 className="text-xl font-bold mb-6">
           Yearly Contributions
         </h3>
-        <Heatmap />
+        <Heatmap safeDate={safeDate} />
       </div>
+ </>
+    )}
 
     </div>
   </div>
@@ -678,7 +770,7 @@ useEffect(() => {
       }
     }
 
-    setMessage("🎉 Correct Sudoku!");
+    setMessage("🎉 Correct! Great Job!");
     onComplete(difficultyLevel);
   };
 
@@ -728,7 +820,7 @@ useEffect(() => {
                    transition-all duration-200 shadow-sm"
       >
         <CheckCircle size={18} />
-        Check
+        Submit
       </button>
 
       {/* CLEAN HINT BUTTON */}
@@ -865,10 +957,10 @@ if (patternType === 3) difficultyLevel = 2; // Power (Hard)
 
   const check = () => {
     if (Number(input) === answer) {
-      setMessage("🎉 Correct!");
+      setMessage("🎉 Correct! Great Job!");
       onComplete(difficultyLevel);
     } else {
-      setMessage("❌ Incorrect!");
+      setMessage("❌ Incorrect! Please Try Again");
     }
   };
 
@@ -915,7 +1007,7 @@ if (patternType === 3) difficultyLevel = 2; // Power (Hard)
                      transition-all duration-200 shadow-sm"
         >
           <CheckCircle size={18} />
-          Check
+          Submit
         </button>
 
         {/* ✅ CLEAN HINT BUTTON */}
@@ -1057,10 +1149,10 @@ useEffect(() => {
 
   const check = () => {
     if (choice === answer) {
-      setMessage("🎉 Correct!");
+      setMessage("🎉 Correct! Great Job!");
       onComplete(difficultyLevel);
     } else {
-      setMessage("❌ Incorrect!");
+      setMessage("❌ Incorrect! Please Try Again");
     }
   };
 
@@ -1118,7 +1210,7 @@ useEffect(() => {
                      transition-all duration-200 shadow-sm"
         >
           <CheckCircle size={18} />
-          Check
+          Submit
         </button>
 
         {/* CLEAN HINT BUTTON */}
@@ -1253,10 +1345,10 @@ useEffect(() => {
 
   const check = () => {
     if (Number(input) === result) {
-      setMessage("🎉 Correct!");
+      setMessage("🎉 Correct! Great Job!");
       onComplete(difficultyLevel);
     } else {
-      setMessage("❌ Incorrect!");
+      setMessage("❌ Incorrect! Please Try Again");
     }
   };
 
@@ -1513,10 +1605,10 @@ useEffect(() => {
   const normalizedAnswer = correctAnswer.toLowerCase();
 
   if (normalizedInput === normalizedAnswer) {
-    setMessage("🎉 Correct!");
+    setMessage("🎉 Correct! Great Job!");
     onComplete(difficultyLevel);
   } else {
-    setMessage("❌ Incorrect!");
+    setMessage("❌ Incorrect! Please Try Again");
   }
 };
 
@@ -1596,7 +1688,7 @@ useEffect(() => {
                    transition-all duration-200 shadow-sm"
       >
         <CheckCircle size={18} />
-        Check
+        Submit
       </button>
 
       {/* HINT BUTTON */}
@@ -1697,8 +1789,9 @@ const HeatmapCell = React.memo(function HeatmapCell({
 });
 
 
-function Heatmap() {
-  const today = dayjs();
+function Heatmap({ safeDate }) {
+  const today = dayjs(safeDate);
+
   const year = today.year();
 
   const startOfYear = dayjs(`${year}-01-01`);
