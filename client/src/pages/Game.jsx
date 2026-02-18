@@ -20,6 +20,7 @@ import { useWindowSize } from "@react-hook/window-size";
 import { generateSeed } from "../utils/seed";
 import { savePuzzle, getPuzzle } from "../lib/db";
 import { getProgress, saveProgress, getMeta, saveMeta } from "../lib/db";
+import React, { useMemo } from "react";
 
 import { useState, useEffect } from "react";
 
@@ -185,7 +186,7 @@ export default function Game() {
 
   /* ---------------- MARK COMPLETE ---------------- */
 
- const markCompleted = async () => {
+ const markCompleted = async (difficultyLevel = 0) => {
   let saved = await getProgress("logic-progress");
 
   if (!saved) {
@@ -233,6 +234,15 @@ export default function Game() {
 
   saved.dailyScores[todayString] = finalScore;
   saved.dailyTimes[todayString] = seconds;
+
+  saved.dailyHints = saved.dailyHints || {};
+saved.dailyHints[todayString] = hintsUsed;
+
+
+  // Create difficulty object if not exists
+saved.dailyDifficulty = saved.dailyDifficulty || {};
+
+saved.dailyDifficulty[todayString] = difficultyLevel;
 
   try {
   await fetch("http://localhost:5000/api/sync", {
@@ -525,6 +535,11 @@ function NumberMatrix({ seed, onComplete, onHint, hintsRemaining }) {
   /* ---------------- DIFFICULTY SCALING ---------------- */
 
   const blanks = 4 + (seed % 6);
+  let difficultyLevel = 0;
+
+if (blanks <= 5) difficultyLevel = 0;      // Easy
+else if (blanks <= 7) difficultyLevel = 1; // Medium
+else difficultyLevel = 2;                  // Hard
 
 
   function generatePuzzle(sol, seed) {
@@ -664,7 +679,7 @@ useEffect(() => {
     }
 
     setMessage("🎉 Correct Sudoku!");
-    onComplete();
+    onComplete(difficultyLevel);
   };
 
   /* ---------------- UI ---------------- */
@@ -762,9 +777,16 @@ function SequenceSolver({ seed, onComplete, onHint, hintsRemaining }) {
 
   const rand = createSeededRandom(seed);
 
-  const difficultyLevel = Math.floor(rand() * 3);
   const patternType = Math.floor(rand() * 4);
 
+  let difficultyLevel = 0;
+
+if (patternType === 0) difficultyLevel = 0; // Arithmetic (Easy)
+if (patternType === 1) difficultyLevel = 1; // Geometric (Medium)
+if (patternType === 2) difficultyLevel = 1; // Fibonacci (Medium)
+if (patternType === 3) difficultyLevel = 2; // Power (Hard)
+
+  
   let sequence = [];
   let answer;
   let ruleDescription = "";
@@ -844,7 +866,7 @@ function SequenceSolver({ seed, onComplete, onHint, hintsRemaining }) {
   const check = () => {
     if (Number(input) === answer) {
       setMessage("🎉 Correct!");
-      onComplete();
+      onComplete(difficultyLevel);
     } else {
       setMessage("❌ Incorrect!");
     }
@@ -946,9 +968,16 @@ function PatternMatch({ seed, onComplete, onHint, hintsRemaining }) {
 
   const symbols = ["🔺", "🔵", "⬛", "⬜", "🟢", "🟡"];
 
-  const difficulty = Math.floor(rand() * 3);
-  const patternLength = 4 + difficulty;
+  
+  const patternLength = 4;
+
   const ruleType = Math.floor(rand() * 4);
+  let difficultyLevel = 0;
+
+if (ruleType === 0) difficultyLevel = 0; // Cyclic (Easy)
+if (ruleType === 1) difficultyLevel = 0; // Alternating (Easy)
+if (ruleType === 2) difficultyLevel = 1; // Skip (Medium)
+if (ruleType === 3) difficultyLevel = 2; // Mirror (Hard)
 
   let pattern = [];
   let answer;
@@ -1003,22 +1032,33 @@ function PatternMatch({ seed, onComplete, onHint, hintsRemaining }) {
   const storageKey = `logic-pattern-${seed}`;
 
 
-  const [choice, setChoice] = useState(() => {
-    const saved = localStorage.getItem(storageKey);
-    return saved || "";
-  });
+  const [choice, setChoice] = useState(null);
+ useEffect(() => {
+  async function loadPattern() {
+    const saved = await getPuzzle(storageKey);
+
+    if (saved !== undefined && saved !== null) {
+      setChoice(saved);
+    } else {
+      setChoice("");
+    }
+  }
+
+  loadPattern();
+}, [storageKey]);
+useEffect(() => {
+  if (choice !== null) {
+    savePuzzle(storageKey, choice);
+  }
+}, [choice, storageKey]);
 
   const [message, setMessage] = useState("");
   const [hintMessage, setHintMessage] = useState("");
 
-  useEffect(() => {
-    localStorage.setItem(storageKey, choice);
-  }, [choice, storageKey]);
-
   const check = () => {
     if (choice === answer) {
       setMessage("🎉 Correct!");
-      onComplete();
+      onComplete(difficultyLevel);
     } else {
       setMessage("❌ Incorrect!");
     }
@@ -1131,7 +1171,8 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
 
   const rand = createSeededRandom(seed);
 
-  const difficulty = Math.floor(rand() * 3);
+  const structureLevel = Math.floor(rand() * 3);
+
   const operators = ["AND", "OR", "XOR", "NAND", "NOR"];
 
   function applyOp(a, b, op) {
@@ -1153,13 +1194,13 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
   let result;
   let hintExplanation = "";
 
-  if (difficulty === 0) {
+  if (structureLevel === 0) {
     expression = `${a} ${op1} ${b}`;
     result = applyOp(a, b, op1);
     hintExplanation = `Evaluate: ${a} ${op1} ${b} = ${result}`;
   }
 
-  else if (difficulty === 1) {
+  else if (structureLevel === 1) {
     expression = `(${a} ${op1} ${b}) ${op2} ${c}`;
     const first = applyOp(a, b, op1);
     result = applyOp(first, c, op2);
@@ -1174,6 +1215,12 @@ function BinaryLogic({ seed, onComplete, onHint, hintsRemaining }) {
     result = second ^ d;
     hintExplanation = `Step 1: (${a} ${op1} ${b}) = ${first}`;
   }
+
+    let difficultyLevel = 0;
+
+if (structureLevel === 0) difficultyLevel = 0; // Easy
+if (structureLevel === 1) difficultyLevel = 1; // Medium
+if (structureLevel === 2) difficultyLevel = 2; // Hard
 
 
   const storageKey = `logic-binary-${seed}`;
@@ -1207,7 +1254,7 @@ useEffect(() => {
   const check = () => {
     if (Number(input) === result) {
       setMessage("🎉 Correct!");
-      onComplete();
+      onComplete(difficultyLevel);
     } else {
       setMessage("❌ Incorrect!");
     }
@@ -1346,35 +1393,36 @@ function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
     allWorlds[Math.floor(rand() * allWorlds.length)];
 
   /* ---------------- GENERATE CLUES ---------------- */
+function generateClues(world) {
+  const clues = [];
 
-  function generateClues(world) {
-    const clues = [];
+  // Direct color clue
+  const person1 = people[Math.floor(rand() * 3)];
+  clues.push({
+    type: "likes",
+    person: person1,
+    value: world[person1].color,
+  });
 
-    const person1 = people[Math.floor(rand() * 3)];
-    clues.push({
-      type: "likes",
-      person: person1,
-      value: world[person1].color,
-    });
+  // Cross-link clue (pet + color)
+  const person2 = people.find(p => p !== person1);
+  clues.push({
+    type: "petColor",
+    pet: world[person2].pet,
+    color: world[person2].color,
+  });
 
-    const person2 = people[Math.floor(rand() * 3)];
-    const wrongPet =
-      pets.find((p) => p !== world[person2].pet);
-    clues.push({
-      type: "notPet",
-      person: person2,
-      value: wrongPet,
-    });
+  // Elimination clue
+  const person3 = people.find(p => p !== person1 && p !== person2);
+  const wrongPet = pets.find(p => p !== world[person3].pet);
+  clues.push({
+    type: "notPet",
+    person: person3,
+    value: wrongPet,
+  });
 
-    const person3 = people[Math.floor(rand() * 3)];
-    clues.push({
-      type: "petColor",
-      pet: world[person3].pet,
-      color: world[person3].color,
-    });
-
-    return clues;
-  }
+  return clues;
+}
 
   function satisfies(world, clues) {
     return clues.every((clue) => {
@@ -1404,6 +1452,13 @@ function DeductionGrid({ seed, onComplete, onHint, hintsRemaining }) {
 
     attempts++;
   }
+
+  let difficultyLevel = 0;
+
+if (attempts <= 5) difficultyLevel = 0;       // Easy
+else if (attempts <= 20) difficultyLevel = 1; // Medium
+else difficultyLevel = 2;                     // Hard
+
 
   const finalWorld =
     validWorlds.length === 1 ? validWorlds[0] : trueWorld;
@@ -1459,7 +1514,7 @@ useEffect(() => {
 
   if (normalizedInput === normalizedAnswer) {
     setMessage("🎉 Correct!");
-    onComplete();
+    onComplete(difficultyLevel);
   } else {
     setMessage("❌ Incorrect!");
   }
@@ -1574,6 +1629,74 @@ useEffect(() => {
   </div>
 );
 }
+
+function formatTime(seconds) {
+  if (!seconds) return "00:00";
+
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+
+  return `${mins.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+const HeatmapCell = React.memo(function HeatmapCell({
+  day,
+  getColor,
+  isFirstColumn,
+  rowIndex
+}) {
+  const showBelow = rowIndex <= 2; // Sun, Mon, Tue
+
+  return (
+    <div className="relative group overflow-visible">
+      <div
+        className={`
+          w-4 h-4 rounded-sm transition-transform hover:scale-125
+          ${day.isFuture ? "bg-gray-100 opacity-30" : getColor(day)}
+        `}
+      />
+
+      {!day.isFuture && (
+        <div
+          className={`
+            absolute
+            ${showBelow ? "top-6" : "bottom-6"}
+            hidden group-hover:block
+            bg-black text-white text-xs
+            px-3 py-2 rounded-lg shadow-lg
+            whitespace-nowrap z-50
+            ${isFirstColumn
+              ? "left-0"
+              : "left-1/2 -translate-x-1/2"}
+          `}
+        >
+          <div>{day.date}</div>
+          <div>Score: {day.score || 0}</div>
+          <div>Time: {formatTime(day.time)}</div>
+          <div>
+            Difficulty: {
+              day.difficulty === 0 ? "Easy" :
+              day.difficulty === 1 ? "Medium" :
+              day.difficulty === 2 ? "Hard" :
+              "Easy"
+            }
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+
 function Heatmap() {
   const today = dayjs();
   const year = today.year();
@@ -1584,20 +1707,40 @@ function Heatmap() {
   const startDate = startOfYear.startOf("week");
   const endDate = endOfYear.endOf("week");
 
-  const progress = JSON.parse(localStorage.getItem("logic-progress")) || {
-    completedDates: {},
-    dailyScores: {},
-  };
+  const [progress, setProgress] = useState(null);
+  useEffect(() => {
+  async function loadProgress() {
+    const saved = await getProgress("logic-progress");
 
-  const days = [];
+    if (saved) {
+      setProgress(saved);
+    } else {
+      setProgress({
+        completedDates: {},
+        dailyScores: {},
+        dailyTimes: {},
+        dailyDifficulty: {},
+      });
+    }
+  }
+
+  loadProgress();
+}, []);
+
+  const days = useMemo(() => {
+  if (!progress) return [];
+  const arr = [];
   let current = startDate;
 
   while (current.isBefore(endDate) || current.isSame(endDate)) {
     const dateString = current.format("YYYY-MM-DD");
 
-    days.push({
+    arr.push({
       date: dateString,
       score: progress.dailyScores?.[dateString] || 0,
+      time: progress.dailyTimes?.[dateString] || 0,
+      difficulty: progress.dailyDifficulty?.[dateString] || null,
+      hints: progress.dailyHints?.[dateString] ?? null,
       completed: progress.completedDates?.[dateString] || false,
       month: current.month(),
       isCurrentYear: current.year() === year,
@@ -1607,6 +1750,59 @@ function Heatmap() {
     current = current.add(1, "day");
   }
 
+  return arr;
+}, [progress, year]);
+
+//Perfect Month Calculation
+const perfectMonths = useMemo(() => {
+  const monthMap = {};
+
+  days.forEach((day) => {
+    if (!day.isCurrentYear) return;
+
+    const month = day.month;
+
+    if (!monthMap[month]) {
+      monthMap[month] = {
+        totalDays: 0,
+        completedDays: 0,
+        perfectDays: 0,
+      };
+    }
+
+    monthMap[month].totalDays++;
+
+    if (day.completed) {
+      monthMap[month].completedDays++;
+    }
+
+    const isPerfect =
+  day.completed &&
+  day.hints === 0 &&
+  day.time <= 120;
+
+if (isPerfect) {
+  monthMap[month].perfectDays++;
+}
+
+  });
+
+  const result = [];
+
+  Object.keys(monthMap).forEach((month) => {
+    const data = monthMap[month];
+
+    if (
+      data.completedDays === data.totalDays &&
+      data.perfectDays === data.totalDays
+    ) {
+      result.push(Number(month));
+    }
+  });
+
+  return result;
+}, [days]);
+
   // Group into weeks (columns)
   const weeks = [];
   for (let i = 0; i < days.length; i += 7) {
@@ -1615,13 +1811,20 @@ function Heatmap() {
 
   const getColor = (day) => {
   if (!day.isCurrentYear) return "bg-transparent";
-
   if (!day.completed) return "bg-gray-200";
 
-  if (day.score < 300) return "bg-emerald-400 shadow-sm";
-  if (day.score < 500) return "bg-emerald-500 shadow-md";
-  if (day.score < 800) return "bg-emerald-600 shadow-md";
-  return "bg-emerald-700 shadow-lg";
+  const perfect =
+  day.completed &&
+  day.hints === 0 &&
+  day.time <= 120;
+
+  const hard = day.difficulty === 2;
+
+  if (perfect) return "bg-purple-700 shadow-lg";
+  if (hard) return "bg-emerald-700 shadow-md";
+  if (day.score > 500) return "bg-emerald-600";
+  if (day.score > 300) return "bg-emerald-500";
+  return "bg-emerald-400";
 };
 
 
@@ -1630,12 +1833,15 @@ function Heatmap() {
     "Jul","Aug","Sep","Oct","Nov","Dec"
   ];
 
+  if (!progress) {
+  return <div>Loading heatmap...</div>;
+}
   return (
     <div className="mt-10">
 
       
-      <div className="overflow-x-auto">
-        <div className="inline-block">
+      <div className="overflow-x-auto relative">
+        <div className="inline-block overflow-visible">
 
           {/* MONTH LABELS */}
           <div className="flex gap-1.5 ml-[34px] mb-2 text-xs text-gray-500">
@@ -1672,21 +1878,20 @@ function Heatmap() {
             {/* GRID */}
             <div className="flex gap-1.5">
               {weeks.map((week, i) => (
-                <div key={i} className="flex flex-col gap-1.5">
-                  {week.map((day) => (
-                    <div
-                      key={day.date}
-                      title={day.date}
-                      className={`
-                        w-4 h-4 rounded-sm transition-transform hover:scale-125
-                        ${day.isFuture ? "bg-gray-100 opacity-30" : getColor(day)}
-                      `}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+              <div key={i} className="flex flex-col gap-1.5">
+                {week.map((day, rowIndex) => (
+                  <HeatmapCell
+                    key={day.date}
+                    day={day}
+                    getColor={getColor}
+                    isFirstColumn={i === 0}
+                    rowIndex={rowIndex}
+                  />
+                ))}
+              </div>
+            ))}
 
+            </div>
           </div>
         </div>
       </div>
@@ -1703,6 +1908,26 @@ function Heatmap() {
         </div>
         <span>More</span>
       </div>
+      
+      {/* Perfect month badge*/}
+      {perfectMonths.length > 0 && (
+          <div className="mt-6 p-4 bg-purple-100 rounded-xl text-center">
+            <p className="font-bold text-purple-700 mb-2">
+              🏆 Perfect Months Achieved!
+            </p>
+
+            <div className="flex justify-center gap-2 flex-wrap">
+              {perfectMonths.map((m) => (
+                <span
+                  key={m}
+                  className="px-3 py-1 bg-purple-600 text-white rounded-full text-sm"
+                >
+                  {monthNames[m]}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
     </div>
   );
